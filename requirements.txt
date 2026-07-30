@@ -1,0 +1,15 @@
+# Stage 1 (required)
+neo4j>=5.14          # BloodHound database access; only needed for live loads
+networkx>=3.0        # plotting + independent cross-check of our Dijkstra
+
+# Stage 4-5 (install now so the Non-Cyber Track's Stage 0 setup task is done)
+gymnasium>=0.29
+stable-baselines3>=2.2
+torch>=2.1
+numpy>=1.24
+scipy>=1.11          # confidence intervals, bootstrap CIs for Stage 5
+pandas>=2.0
+matplotlib>=3.7
+
+# dev
+pytest>=7.4

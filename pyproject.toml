@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+# Puts the repo root on sys.path so `tests/` can import `stealthpath` without an
+# install step. Tests must stay runnable from a bare checkout — a lab machine
+# mid-collection is not the place to debug packaging.
+pythonpath = ["."]
+testpaths = ["tests"]

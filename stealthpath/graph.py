@@ -445,7 +445,13 @@ class AttackGraph:
         # after collection, and failing there would mean re-running SharpHound.
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(self.to_dict(), indent=1), encoding="utf-8")
+        # newline="\n" explicitly: a frozen graph is cited by sha256, and the
+        # platform default would make that hash depend on which OS ran the
+        # freeze. Windows produced CRLF here and Linux would produce LF for
+        # byte-identical content, so the same collection would carry two
+        # different "ground truth" hashes.
+        with p.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(self.to_dict(), indent=1))
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AttackGraph":

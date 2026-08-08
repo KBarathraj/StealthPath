@@ -14,6 +14,58 @@ Re-check anything marked as sensitive to weights once the sourcing pass lands.
 
 ---
 
+## 2026-08-05 (later) — the flip fired on half a baseline, then un-fired
+
+**Correction to the entry below.** The 1.5 floor was derived from native AD
+auditing only: 5136/4670 need a SACL, the baseline grants SACLs on tier-zero
+objects only, so an ACL write on an ordinary object emits nothing. Sound, and
+incomplete — **the baseline also assumes EDR/Sysmon-class telemetry, which needs
+no SACL.**
+
+SigmaHQ `posh_ps_powerview_malicious_commandlets.yml` fires on script-block
+logging (4104) for the PowerView cmdlets that perform these writes
+(`Add-DomainObjectAcl`, `Set-DomainObjectOwner`), and Sysmon Event 1 carries the
+command line. Both in-baseline, named shipped rule, distinctive low-false-positive
+strings. **The write is observed.** Base re-derived 1.5 → **4.0**.
+
+| | plain | weighted | |
+|---|---|---|---|
+| `SAMWELL` | 2h / 4.1 | 2h / 4.1 | **still identical** |
+| `SQL_SVC` | 4h / 21.5 | 4h / **13.6** | gap **7.9** |
+| `TYWIN` | 9h / 42.0 | 9h / 42.0 | identical |
+
+### The near-miss is the finding
+
+The intermediate 1.5 would have produced a striking headline — *directory
+modification is quieter than ticket forgery* — and it was an artifact of
+deriving from half the stated baseline. **It survived a full review pass before
+being caught.** Recorded because the sourcing method is itself a contribution,
+and this is the clearest example of it failing and then working.
+
+The 1.5 is not discarded. It is preserved as the `tooling_is_native_ldap`
+conditional, because it is the right answer for an attacker using
+`.NET DirectoryServices`, SharpView, or Impacket `dacledit` from Linux. **The
+detection is tooling-dependent, not technique-dependent, and evasion is cheap** —
+renaming a function defeats it. That assumption is recorded on every one of the
+four weights.
+
+### `SAMWELL`'s loss is robust to the correction
+
+It did not come back. All four ACL writes derive to the **same** base — the EDR
+signal is identical regardless of which right is written — so `GenericWrite` and
+`WriteOwner` tie at any floor level. The original 0.5 gap was an artifact of two
+arbitrary guesses, and no honest derivation reproduces it. Pinned by
+`test_acl_write_ordering_after_the_full_baseline_derivation`.
+
+### Registered flip: fired, then un-fired
+
+`SpoofSIDHistory` (3.5) is back below the ACL writes (4.0), where it started. The
+cross-check prediction was right after all — but only once the derivation was
+complete. **A prediction that fails against an incomplete derivation has not
+actually failed.**
+
+---
+
 ## 2026-08-05 — Shape D sourced: one finding survived, one evaporated
 
 **Graph:** unchanged, sha256 `3c1bef97…`. **What changed:** `GenericWrite`,

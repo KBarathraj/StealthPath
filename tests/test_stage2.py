@@ -381,52 +381,55 @@ def test_gpo_route_can_now_be_costed():
                   allowed_rel_types=DEFAULT_TRAVERSAL_SET | GPO_EXPANSION_EDGES)
     assert route is not None
     assert route.rel_types(view) == ["GenericWrite", "GPLink", "Contains"]
-    # 1.5 for the write, 0.2 for the propagation. Was 4.7 before GenericWrite
-    # was sourced; the write dropped to the non-tier-zero value because an
-    # unaudited object emits no 5136.
-    assert route.cost == pytest.approx(1.7)
+    # 4.0 for the write, 0.2 for the propagation. Moved twice: 4.7 while
+    # GenericWrite was an unsourced guess, 1.7 when it was derived from native
+    # AD auditing alone, 4.2 once the EDR half of the baseline was included.
+    assert route.cost == pytest.approx(4.2)
 
 
-def test_acl_writes_price_below_the_forgery_and_delegation_edges():
-    """**The registered flip, fired.**
+def test_acl_write_ordering_after_the_full_baseline_derivation():
+    """**The registered flip fired, then un-fired. Both are recorded here.**
 
-    This test previously asserted the opposite — that `SpoofSIDHistory` priced
-    *below* the ACL writes, on the reasoning that 5136 catches a DACL change
-    while a forged TGT looks ordinary. That held while the ACL writes were
-    unsourced guesses at 5.0.
+    Sequence, because the intermediate state was wrong in an instructive way:
 
-    Sourcing them inverted it. 5136 is not enabled by default and needs a SACL
-    on the target, and the baseline grants SACLs on tier-zero objects only. The
-    overwhelming majority of ACL edges point at ordinary users, computers and
-    groups, where the write emits **nothing at all**. An action nobody records
-    is quieter than one that produces ordinary-looking Kerberos traffic.
+    1. Unsourced guesses put the ACL writes at 4.5-5.0.
+    2. Deriving from native AD auditing alone gave 1.5 - no SACL on ordinary
+       objects, so no 5136, so nothing recorded. That fired the flip registered
+       in the audit doc's cross-check table: ACL writes became the quietest
+       actions in the schema, below ticket forgery and delegation abuse.
+    3. That derivation used **half the baseline.** The baseline also assumes
+       EDR/Sysmon-class telemetry, which needs no SACL. A named shipped rule
+       (posh_ps_powerview_malicious_commandlets.yml) fires on script-block
+       logging for the PowerView cmdlets that perform these writes. Including
+       that half puts the base back at 4.0 and **un-fires the flip.**
 
-    So under the stated baseline, ACL writes on unaudited objects are the
-    quietest meaningful actions in the schema — quieter than ticket forgery,
-    quieter than delegation abuse. The `conditional` values carry the tier-zero
-    case where the ordering reverses again.
+    The near-miss is the point. Step 2 would have produced a striking
+    counterintuitive headline - "directory modification is quieter than ticket
+    forgery" - that was an artifact of an incomplete derivation rather than a
+    finding. It survived one review pass before being caught.
 
-    Registered in advance in the audit doc's cross-check table as the expected
-    outcome of Shape D sourcing. The predictions were what was wrong.
+    The 1.5 figure is not discarded: it is preserved as the
+    `tooling_is_native_ldap` conditional, because it is the correct answer for
+    an attacker who avoids recognisable tooling.
     """
     from stealthpath.risk import PROVISIONAL_WEIGHTS, weight_of
 
     acl = ["WriteDacl", "WriteOwner", "GenericAll", "GenericWrite"]
     for rel in acl:
-        assert weight_of(rel) < weight_of("SpoofSIDHistory"), rel
-        assert weight_of(rel) < weight_of("AllowedToDelegate"), rel
-        # ... but never free: an unrecorded action is still an action
-        assert weight_of(rel) > weight_of("MemberOf"), rel
+        # back above the forgery edge, as before step 2
+        assert weight_of(rel) > weight_of("SpoofSIDHistory"), rel
+        # the native-LDAP path is still the quietest thing in the table
+        assert PROVISIONAL_WEIGHTS[rel].conditional["tooling_is_native_ldap"]             < weight_of("SpoofSIDHistory"), rel
+        # tier-zero always outranks the base, since 5136 fires on top of EDR
+        assert PROVISIONAL_WEIGHTS[rel].conditional["target_is_tier_zero"]             > weight_of(rel), rel
 
-    # the tier-zero branch puts them back above the forgery edge
-    for rel in acl:
-        tier0 = PROVISIONAL_WEIGHTS[rel].conditional["target_is_tier_zero"]
-        assert tier0 > weight_of("SpoofSIDHistory"), rel
+    # all four base weights are equal: the EDR signal is the same regardless of
+    # which right is being written. This is why SAMWELL's result did not return.
+    assert len({weight_of(r) for r in acl}) == 1
 
-    # WriteOwner's extra chain leg shows up only where auditing exists
-    assert PROVISIONAL_WEIGHTS["WriteOwner"].conditional["target_is_tier_zero"] > \
-           PROVISIONAL_WEIGHTS["WriteDacl"].conditional["target_is_tier_zero"]
-    assert weight_of("WriteOwner") == weight_of("WriteDacl")
+    # chain length separates them only where directory auditing exists
+    tz = {r: PROVISIONAL_WEIGHTS[r].conditional["target_is_tier_zero"] for r in acl}
+    assert tz["WriteOwner"] > tz["WriteDacl"] > tz["GenericWrite"]
 
 
 def test_rbcd_needs_a_principal_that_can_actually_wield_it():

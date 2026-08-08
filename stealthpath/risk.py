@@ -137,14 +137,37 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
                          "alert, especially on privileged groups."),
     "AddSelf": _w(4.0, "Same modification, same events, attacker as the target."),
     # --- Shape D: ACL writes -----------------------------------------------
-    # SOURCED. All four collapse to near-silence on unaudited objects, because
-    # every detection here runs through 5136 / 4670, and both need a SACL on the
-    # target. The baseline grants SACLs on tier-zero objects only. Chain length
-    # therefore matters *only where auditing exists* - zero events times three
-    # actions is still zero events.
+    # SOURCED, and re-derived once. The first derivation used only the native-AD
+    # half of the baseline: 5136 / 4670 both need a SACL, the baseline grants
+    # SACLs on tier-zero objects only, therefore an ACL write on an ordinary
+    # object emits nothing and the floor is 1.5. That reasoning is sound but
+    # incomplete - the baseline also assumes EDR/Sysmon-class telemetry, which
+    # does NOT depend on a SACL.
+    #
+    # SigmaHQ posh_ps_powerview_malicious_commandlets.yml fires on PowerShell
+    # Script Block Logging (4104) for PowerView cmdlet names including
+    # Add-DomainObjectAcl and Set-DomainObjectOwner, and Sysmon Event 1 carries
+    # the command line. Both are in-baseline. So the write IS observed - a named
+    # shipped rule on assumed telemetry, distinctive low-false-positive strings.
+    #
+    # The catch, and it is the whole reason for the tooling condition: that
+    # signal is TOOLING-dependent, not TECHNIQUE-dependent. Rename the function,
+    # use SharpView, use .NET DirectoryServices from a compiled binary, or run
+    # Impacket dacledit from Linux, and none of it appears. Evasion is cheap.
+    #
+    # Base weight prices the OBSERVABLE case. tooling_is_native_ldap preserves
+    # the 1.5 derivation for a path that emits no endpoint artifact. Chain
+    # length still only matters where directory auditing exists, which is why
+    # WriteOwner's three legs separate from WriteDacl's two only on tier-zero.
+    #
+    # LIMITATION of the conditional field: these keys are flat and do not
+    # compose. Native-LDAP tooling against a TIER-ZERO target still fires 5136,
+    # so the tier-zero value holds there regardless of tooling; the 1.5 applies
+    # to the non-tier-zero case only. A cross-product encoding is Stage 3 work.
     "GenericWrite": RiskWeight(
-        weight=1.5,
-        conditional={"target_is_tier_zero": 4.5, "target_is_gpo": 5.0},
+        weight=4.0,
+        conditional={"target_is_tier_zero": 5.0, "target_is_gpo": 5.5,
+                     "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: write a non-protected attribute -> use the capability that "
             "creates (write an SPN then roast it, write scriptPath then wait for "
@@ -179,8 +202,8 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
                     "noise comes from what follows."),
     "WriteAccountRestrictions": _w(4.5, "Narrow, unusual attribute write."),
     "GenericAll": RiskWeight(
-        weight=1.5,
-        conditional={"target_is_tier_zero": 5.0},
+        weight=4.0,
+        conditional={"target_is_tier_zero": 5.5, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: full control, so the chain is whichever of the others you "
             "actually exercise - reset the password, rewrite the DACL, write an "
@@ -204,8 +227,8 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
     "WriteDacl": RiskWeight(
-        weight=1.5,
-        conditional={"target_is_tier_zero": 5.0},
+        weight=4.0,
+        conditional={"target_is_tier_zero": 5.5, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: write the DACL -> use the granted right. Two actions.\n"
             "  IMPACT-VS-LOUDNESS: 'rarely legitimate outside a change window' "
@@ -227,8 +250,8 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
     "WriteOwner": RiskWeight(
-        weight=1.5,
-        conditional={"target_is_tier_zero": 6.0},
+        weight=4.0,
+        conditional={"target_is_tier_zero": 6.0, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: take ownership -> write the DACL -> use the right. THREE "
             "actions, one more than WriteDacl, and the extra one is separately "

@@ -90,6 +90,52 @@ detection-model axis is where the actual novelty sits.
 
 ---
 
+## Scope statement on H3 — history dependence is tested in a weakened form
+
+**This is a scope statement, not a footnote, and H3 itself is unchanged.**
+
+H3 asks whether the learner's advantage depends on risk being history-dependent.
+The learner's state is `(current node, history summary)`, and the chosen summary
+is **the set of technique categories used so far** — nine categories, one bit
+each.
+
+So "risk depends on the attacker's own history" is operationalised as **"risk
+depends on whether a category has been used before."** One bit per category, a
+single step change on first repeat, no escalation with count. A third
+Kerberoast costs exactly what the second did.
+
+**Why this summary and not a richer one.** Two reasons, and the first is the
+substantive one.
+
+*It is what the telemetry baseline supports.* Unbounded escalation with
+repetition implies a defender accumulating evidence across occurrences and
+raising suspicion as a count grows. That is precisely the correlation and
+baselining the stated baseline excludes. What a default-logging posture actually
+supports is a qualitative shift when a category **first appears** — a technique
+the environment has not seen before. A step change models that; a growing
+gradient models a capability we explicitly do not assume the defender has.
+
+*It is also the tractable one, and that was costed rather than assumed.* The
+set-of-categories summary gives 400,896 states and a sparse Q-table of ~2.87 M
+entries (≈23 MB). The count-based alternative — per-category counts capped at
+three — gives 205 M states and ~1.47 × 10⁹ entries, **≈11.8 GB**, which is where
+tabular learning stops being reasonable. The cheaper representation was chosen
+because the evidence supports it, and it happens to also be the affordable one.
+
+**The consequence for reading H3.** A confirmed H3 under this summary says
+history-dependence *of the first-use kind* is what the learner exploits. It does
+**not** establish that count-based escalation would produce the same result, and
+a reviewer asking that question is asking something the experiment does not
+answer. The answer is: not tested, at 11.8 GB for the representation that would
+test it, and the step form is what the baseline licences.
+
+**Two properties change shape under this summary**, both recorded in
+`stage3_risk_model_properties.md`: P2 is restated as *strictly louder on first
+repeat of a category, non-decreasing thereafter* (the original strict-increase-
+on-every-repeat is unsatisfiable when the summary cannot count), and P15 is
+renamed *bounded step* from *gradient, not cliff* — there is no gradient
+available to a one-bit summary, so the old name would mislead.
+
 ## What is deliberately *not* claimed
 
 - **Not** generalisation across environments. One frozen graph, stated as such.

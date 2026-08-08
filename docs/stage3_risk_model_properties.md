@@ -114,11 +114,16 @@ Doing more things can only make the next thing as loud or louder. If this fails,
 the model can be gamed by padding a route with noise, which inverts the whole
 point.
 
-**P2 — Repeating *the same* technique is strictly louder.**
-`V(e, h + [e], c) > V(e, h, c)`.
-Stronger than P1 and the actual substance of "adaptive". Strictness matters: if
-the increase can be zero, the adaptive model can silently degenerate into the
-static one for some inputs and nobody would see it.
+**P2 — Repeating a technique category for the first time is strictly louder.**
+`V(e, h + [e], c) > V(e, h, c)` **when h contains no edge of e's category**;
+non-decreasing thereafter.
+
+*Restated 2026-08-05.* The original said strictly louder on *every* repeat, and
+that is unsatisfiable under the chosen history summary: the state carries one
+bit per category, so the second and third uses are indistinguishable and V must
+be equal, not greater. The restatement keeps what the property was for — the
+adaptive model must not silently degenerate into the static one — while being
+expressible. See the H3 scope statement in `abstract.md`.
 
 **P3 — Path extension never reduces the score.**
 `S(route + step) >= S(route)`.
@@ -217,9 +222,14 @@ covered by it explicitly.
 
 ---
 
-## Group 5 — the adaptive term must be a gradient, not a cliff
+## Group 5 — the adaptive term must be a bounded step
 
-**P15 — Bounded per-step increase.**
+*Renamed 2026-08-05.* This group was "gradient, not cliff". Under the chosen
+history summary there is no gradient available — a one-bit-per-category state
+can only produce a step — so the old name described a shape the model cannot
+have. What survives, and matters, is that the step be **bounded**.
+
+**P15 — Bounded step.** *(renamed from "gradient, not cliff")*
 No single repetition may move the score by more than a declared fraction of the
 total range.
 

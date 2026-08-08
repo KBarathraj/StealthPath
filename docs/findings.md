@@ -14,6 +14,62 @@ Re-check anything marked as sensitive to weights once the sourcing pass lands.
 
 ---
 
+## 2026-08-05 — Shape D sourced: one finding survived, one evaporated
+
+**Graph:** unchanged, sha256 `3c1bef97…`. **What changed:** `GenericWrite`,
+`WriteDacl`, `WriteOwner`, `GenericAll` moved from unsourced 4.5–5.0 to sourced
+**1.5** (non-tier-zero), with tier-zero conditionals of 4.5–6.0.
+
+| Entry | | before | after |
+|---|---|---|---|
+| `SAMWELL` | plain | 2h / 5.1 `WriteOwner → GPLink` | 2h / **1.6** `WriteOwner → GPLink` |
+| | weighted | 2h / 4.6 `GenericWrite → GPLink` | 2h / **1.6** *identical to plain* |
+| `SQL_SVC` | plain | 4h / 21.5 | 4h / **21.5** unchanged |
+| | weighted | 4h / 14.1 | 4h / **11.1** |
+| `TYWIN` | both | 9h / 46.5 | 9h / **29.5** |
+
+### `SQL_SVC` survived and strengthened — gap 7.4 → 10.4
+
+Still `SQLAdmin → HasSession → MemberOf → GenericWrite` against the plain
+`SQLAdmin → HasSession → AdminTo → DCSync`, still the same hop count, still
+avoiding `DCSync` entirely. The gap widened because the ACL write it uses got
+cheaper. **This result did not depend on the guesses** — it turns on `DCSync`
+(9.0) versus an ACL write, and sourcing moved them further apart, not closer.
+
+### `SAMWELL`'s result evaporated — and that is the honest outcome
+
+Both planners now return `WriteOwner → GPLink` at 1.6. **The weighted planner no
+longer differs from plain shortest path for this entry point.**
+
+The previous 0.5 improvement was `GenericWrite` (4.5) versus `WriteOwner` (5.0) —
+two unsourced guesses, flagged in the process note below as exactly that. Sourced
+honestly, both are 1.5 on an unaudited target: no SACL, no 5136, nothing
+recorded. There is no longer anything to choose between them, so the planners
+tie and the tie-break picks `WriteOwner`.
+
+**A finding was removed by doing the work properly.** Recorded rather than
+quietly dropped, because it is the clearest evidence available that the caveat on
+unsourced weights was load-bearing and not boilerplate.
+
+### The registered flip fired
+
+The audit doc's cross-check table predicted that Shape D sourcing might push
+these five below 3.5 and invert four predictions. It did. Under the stated
+baseline, **ACL writes on ordinary objects are now the quietest meaningful
+actions in the schema** — below ticket forgery (3.5) and below delegation abuse
+(4.0–5.0) — because 5136 needs a SACL and the baseline grants SACLs only on
+tier-zero objects. An action nobody records is quieter than one producing
+ordinary-looking Kerberos traffic.
+
+`test_acl_writes_price_below_the_forgery_and_delegation_edges` was rewritten from
+asserting the old ordering to asserting the new one, with the reasoning.
+
+**Consequence for the graph:** 80.4% of edges just became near-free. Expect the
+weighted planner to become *less* distinguishable from plain shortest path on
+ACL-dominated routes, and more distinguishable where a route can avoid a
+genuinely loud action (`DCSync`, `HasSession`). `SQL_SVC` versus `SAMWELL` is
+that contrast in miniature.
+
 ## 2026-08-04 — First real routes on collected data
 
 **Graph:** `data/goad_graph.json`, sha256 `3c1bef97…` (supersedes `b427ef8a…`, `ff5a00f5…`)

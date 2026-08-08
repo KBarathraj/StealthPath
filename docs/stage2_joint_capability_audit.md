@@ -600,6 +600,28 @@ extra signal to charge for.
 
 ---
 
+## One-line triage for the remaining eight gate weights
+
+No pricing, no derivation — the shape of the problem only, so the next pass
+starts from something rather than nothing. All eight sit on a chosen or rejected
+route for the three documented entry points.
+
+| Edge | Shape of the problem |
+|---|---|
+| `MemberOf` | No action taken; the only trace is authentication that would have happened anyway. Should be at or near the floor and is the one weight unlikely to move. |
+| `AdminTo` | Admin logon to a host — 4624/4672 fire by default, no SACL needed, but the volume is enormous. Visibility without suspicion; the base-rate argument from `CanRDP` applies directly. |
+| `SQLAdmin` | Command execution via SQL. Detection depends on SQL Server auditing, which is **not** in the baseline's assumed set — needs deciding whether that counts as standard tooling. |
+| `HasSession` | Already re-checked under the revised baseline and held at 6.0 (Sysmon Event 10, EDR-visible, no SACL dependency). Needs a named rule to finish, not a re-derivation. |
+| `DCSync` | 4662 with the replication GUIDs. **The one edge whose SACL dependency probably survives** — it is the canonical AD detection and shops enable it *because* of this attack. Confirm rather than assume. |
+| `ForceChangePassword` | 4724 fires by default with no SACL. Also destructive — the user is locked out and notices — but that is the named non-telemetry limitation and must not be folded into the number. |
+| `AddMember` | 4728/4732/4756 fire by default, no SACL, and privileged-group modification is among the most widely alerted events in AD. Likely the loudest of these eight after `DCSync`. |
+| `AddSelf` | Same events as `AddMember`, attacker as the subject. Expect the same number; check whether anything distinguishes them in the log. |
+
+**Pattern worth noting before pricing:** most of these fire on **default-enabled
+channels with no SACL requirement**, unlike the Shape D five. That is likely to
+put several of them *above* the freshly-sourced ACL writes, which would sharpen
+the contrast the `SQL_SVC` result depends on rather than flatten it.
+
 ## Triage status
 
 1. ~~`WriteGPLink`~~ — **done.** Two parts.

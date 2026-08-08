@@ -381,27 +381,52 @@ def test_gpo_route_can_now_be_costed():
                   allowed_rel_types=DEFAULT_TRAVERSAL_SET | GPO_EXPANSION_EDGES)
     assert route is not None
     assert route.rel_types(view) == ["GenericWrite", "GPLink", "Contains"]
-    # 4.5 for the write that actually does something, 0.2 for the propagation
-    assert route.cost == pytest.approx(4.7)
+    # 1.5 for the write, 0.2 for the propagation. Was 4.7 before GenericWrite
+    # was sourced; the write dropped to the non-tier-zero value because an
+    # unaudited object emits no 5136.
+    assert route.cost == pytest.approx(1.7)
 
 
-def test_spoofsidhistory_is_traversable_and_priced_below_the_acl_writes():
-    """Pins the counterintuitive-but-deliberate ordering.
+def test_acl_writes_price_below_the_forgery_and_delegation_edges():
+    """**The registered flip, fired.**
 
-    Under the defender baseline, forging a ticket is *quieter* than modifying
-    the directory: 5136 catches an ACL write, while a cryptographically valid
-    forged TGT produces ordinary-looking 4768/4769. So a cost-minimising planner
-    will prefer SID-history spoofing to a DACL write, and that is a real finding
-    rather than a mispricing. If this ordering is ever reversed it should be a
-    deliberate decision with a source behind it.
+    This test previously asserted the opposite — that `SpoofSIDHistory` priced
+    *below* the ACL writes, on the reasoning that 5136 catches a DACL change
+    while a forged TGT looks ordinary. That held while the ACL writes were
+    unsourced guesses at 5.0.
+
+    Sourcing them inverted it. 5136 is not enabled by default and needs a SACL
+    on the target, and the baseline grants SACLs on tier-zero objects only. The
+    overwhelming majority of ACL edges point at ordinary users, computers and
+    groups, where the write emits **nothing at all**. An action nobody records
+    is quieter than one that produces ordinary-looking Kerberos traffic.
+
+    So under the stated baseline, ACL writes on unaudited objects are the
+    quietest meaningful actions in the schema — quieter than ticket forgery,
+    quieter than delegation abuse. The `conditional` values carry the tier-zero
+    case where the ordering reverses again.
+
+    Registered in advance in the audit doc's cross-check table as the expected
+    outcome of Shape D sourcing. The predictions were what was wrong.
     """
-    from stealthpath.risk import weight_of
-    assert "SpoofSIDHistory" in DEFAULT_TRAVERSAL_SET
-    assert weight_of("SpoofSIDHistory") < weight_of("WriteDacl")
-    assert weight_of("SpoofSIDHistory") < weight_of("GenericAll")
-    assert weight_of("SpoofSIDHistory") < weight_of("AddKeyCredentialLink")
-    # ... but still well above a no-op traversal
-    assert weight_of("SpoofSIDHistory") > weight_of("MemberOf")
+    from stealthpath.risk import PROVISIONAL_WEIGHTS, weight_of
+
+    acl = ["WriteDacl", "WriteOwner", "GenericAll", "GenericWrite"]
+    for rel in acl:
+        assert weight_of(rel) < weight_of("SpoofSIDHistory"), rel
+        assert weight_of(rel) < weight_of("AllowedToDelegate"), rel
+        # ... but never free: an unrecorded action is still an action
+        assert weight_of(rel) > weight_of("MemberOf"), rel
+
+    # the tier-zero branch puts them back above the forgery edge
+    for rel in acl:
+        tier0 = PROVISIONAL_WEIGHTS[rel].conditional["target_is_tier_zero"]
+        assert tier0 > weight_of("SpoofSIDHistory"), rel
+
+    # WriteOwner's extra chain leg shows up only where auditing exists
+    assert PROVISIONAL_WEIGHTS["WriteOwner"].conditional["target_is_tier_zero"] > \
+           PROVISIONAL_WEIGHTS["WriteDacl"].conditional["target_is_tier_zero"]
+    assert weight_of("WriteOwner") == weight_of("WriteDacl")
 
 
 def test_rbcd_needs_a_principal_that_can_actually_wield_it():

@@ -136,16 +136,120 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "AddMember": _w(4.0, "Group modification. Well-known event IDs and a common "
                          "alert, especially on privileged groups."),
     "AddSelf": _w(4.0, "Same modification, same events, attacker as the target."),
-    "GenericWrite": _w(4.5, "Broad write. Loudness depends on what you actually "
-                            "write, which this static model cannot see."),
+    # --- Shape D: ACL writes -----------------------------------------------
+    # SOURCED. All four collapse to near-silence on unaudited objects, because
+    # every detection here runs through 5136 / 4670, and both need a SACL on the
+    # target. The baseline grants SACLs on tier-zero objects only. Chain length
+    # therefore matters *only where auditing exists* - zero events times three
+    # actions is still zero events.
+    "GenericWrite": RiskWeight(
+        weight=1.5,
+        conditional={"target_is_tier_zero": 4.5, "target_is_gpo": 5.0},
+        rationale=(
+            "Chain: write a non-protected attribute -> use the capability that "
+            "creates (write an SPN then roast it, write scriptPath then wait for "
+            "a logon). Two actions.\n"
+            "  IMPACT-VS-LOUDNESS: broad write authority is impact. The only "
+            "question here is whether the attribute write is recorded. On an "
+            "object with no SACL it is not recorded at all, and 4.5 was pricing "
+            "the authority rather than the noise.\n"
+            "  non-tier-zero (1.5, applies today): no SACL, no 5136. The write "
+            "is invisible; what the attacker later does with it is priced on "
+            "that edge, not this one.\n"
+            "  tier-zero (4.5): 5136 fires and names the modified attribute.\n"
+            "  GPO target (5.0): the SYSVOL route is NOT tier-dependent - "
+            "win_security_gpo_scheduledtasks.yml fires on 5145 share access to "
+            "ScheduledTasks.xml as well as on 5136, and SYSVOL file-share "
+            "auditing is a different channel from AD-object SACLs. A GPO write "
+            "is the best-covered case in this group."
+        ),
+        source=(
+            "SigmaHQ win_security_gpo_scheduledtasks.yml (GPO branch): event "
+            "codes 5136 and 5145, gPCMachineExtensionNames / "
+            "gPCUserExtensionNames modification, and SYSVOL ScheduledTasks.xml "
+            "access. Cited specifically rather than via a generic ACL-write "
+            "rule, which would not cover this technique. "
+            "Generic branch: 5136 (Directory Service Changes) - NOT enabled by "
+            "default, requires DS Access audit policy AND a SACL on the object. "
+            "ATT&CK fit is weak: T1222 is file/directory permissions, not "
+            "directory-object attributes, so no technique ID is claimed."
+        ),
+    ),
     "Owns": _w(4.5, "Ownership implies the ability to rewrite the DACL; the "
                     "noise comes from what follows."),
     "WriteAccountRestrictions": _w(4.5, "Narrow, unusual attribute write."),
-    "GenericAll": _w(5.0, "Full control. Same caveat as GenericWrite — the "
-                          "abuse, not the right, is what gets logged."),
-    "WriteDacl": _w(5.0, "DACL modification. Distinctive and rarely legitimate "
-                         "outside a change window."),
-    "WriteOwner": _w(5.0, "Ownership change. Same reasoning as WriteDacl."),
+    "GenericAll": RiskWeight(
+        weight=1.5,
+        conditional={"target_is_tier_zero": 5.0},
+        rationale=(
+            "Chain: full control, so the chain is whichever of the others you "
+            "actually exercise - reset the password, rewrite the DACL, write an "
+            "attribute. The static model cannot see which, so it is priced as "
+            "the common case (a DACL write or password reset).\n"
+            "  IMPACT-VS-LOUDNESS: 'full control' is the purest impact framing "
+            "in the whole table and 5.0 was mostly that. Holding the right emits "
+            "nothing; only using it can, and only if the object is audited.\n"
+            "  Sourcing this matters even though its weight moves no route. "
+            "GenericAll shows no route change under +/-1.5 perturbation on any "
+            "of the three entry points, and that inertness is a reported "
+            "finding - but 'the weight does not matter here' is only a finding "
+            "if the weight is defensible. An inert unsourced guess is not "
+            "evidence of anything."
+        ),
+        source=(
+            "Same 5136 / 4670 dependency as WriteDacl, since the observable act "
+            "is whichever right is exercised. TrustedSec, 'A Hitch-hacker's "
+            "Guide to DACL-Based Detections' (parts 1a/1b/3) for the detection "
+            "engineering and its preconditions."
+        ),
+    ),
+    "WriteDacl": RiskWeight(
+        weight=1.5,
+        conditional={"target_is_tier_zero": 5.0},
+        rationale=(
+            "Chain: write the DACL -> use the granted right. Two actions.\n"
+            "  IMPACT-VS-LOUDNESS: 'rarely legitimate outside a change window' "
+            "was the old rationale, and that is a claim about *suspiciousness "
+            "once seen*, not about whether it is seen. On an unaudited object "
+            "it is never seen.\n"
+            "  tier-zero (5.0): 4670 carries the old and new SDDL, which makes "
+            "triage cheap, plus 5136 on nTSecurityDescriptor. Slightly above "
+            "GenericWrite's tier-zero because a DACL change is more distinctive "
+            "than an arbitrary attribute write."
+        ),
+        source=(
+            "Event 4670 (permissions on an object were changed; old/new SDDL) "
+            "and 5136 on nTSecurityDescriptor. Both require auditing configured "
+            "AND a SACL on the target. TrustedSec, 'A Hitch-hacker's Guide to "
+            "DACL-Based Detections', which is explicit that the SACL is the "
+            "precondition. ATT&CK T1222 is a weak fit (file/directory, not "
+            "directory objects); not claimed."
+        ),
+    ),
+    "WriteOwner": RiskWeight(
+        weight=1.5,
+        conditional={"target_is_tier_zero": 6.0},
+        rationale=(
+            "Chain: take ownership -> write the DACL -> use the right. THREE "
+            "actions, one more than WriteDacl, and the extra one is separately "
+            "logged where auditing exists.\n"
+            "  This is where the Shape D chain-length guidance actually bites, "
+            "and it bites asymmetrically: on a tier-zero target the longer chain "
+            "means two audited modifications rather than one, so 6.0 - the "
+            "highest of this group. On an unaudited target the longer chain "
+            "produces exactly as many events as the shorter one, namely none, "
+            "so it collapses to the same 1.5. Chain length is only loud where "
+            "something is listening.\n"
+            "  Caveat carried from the OWNER RIGHTS finding: SharpHound emits "
+            "Owns unconditionally with no OWNER RIGHTS check, so the "
+            "take-ownership leg can be blocked in ways the graph cannot show."
+        ),
+        source=(
+            "nTSecurityDescriptor owner change and the subsequent DACL write, "
+            "both via 5136 / 4670, both SACL-dependent. TrustedSec DACL-based "
+            "detections series. MS-ADTS 6.1.3.4 for the OWNER RIGHTS caveat."
+        ),
+    ),
     "WriteSPN": _w(5.5, "Targeted Kerberoasting: write an SPN, request the "
                         "ticket, remove it. The write and the ticket request "
                         "are two separate signals."),

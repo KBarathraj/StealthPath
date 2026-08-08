@@ -25,7 +25,7 @@ the next thing to do.
 ```bash
 python -m venv .venv && .venv/Scripts/activate     # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                                    # 37 tests, no network, no database
+pytest -q                                    # 110 pass + 3 skipped, no network, no database
 ```
 
 ```bash
@@ -34,6 +34,12 @@ python -m stealthpath.cli inspect --synthetic
 
 ```bash
 python -m stealthpath.cli path --synthetic --verify --to "DOMAIN ADMINS@NORTH"
+```
+
+Run both planners on the same endpoints and see what the risk weights buy:
+
+```bash
+python -m stealthpath.cli compare --synthetic --to "DOMAIN ADMINS@NORTH"
 ```
 
 The synthetic fixture is a development substrate so software work isn't blocked
@@ -45,17 +51,26 @@ collection.
 ```
 docs/
   stage1_lab_runbook.md     GOAD + SharpHound checklist and the milestone gate
+  stage2_joint_capability_audit.md   Edges that overstate what an attacker holds
+  stage3_risk_model_properties.md    Properties the risk model must satisfy
+  findings.md               Running log of real results, each tied to a graph hash
+  generator_vs_real_distribution.md  Why random_ad cannot back distributional claims
   stage0_related_work.md    PARKED — research phase, after Stage 5
   stage0_hypotheses.md      PARKED — research phase, after Stage 5
 stealthpath/
   graph.py                  AttackGraph / Node / Edge — the shared substrate
-  ad_schema.py              BloodHound edge taxonomy + Stage 2 risk-weight worksheet
+  ad_schema.py              BloodHound edge taxonomy + ATT&CK candidate worksheet
+  risk.py                   Static per-edge risk weights + the static cost function
+  risk_properties.py        Stage 3 gate — structural properties, as runnable checks
   loader_neo4j.py           BloodHound Neo4j → AttackGraph (legacy + CE)
-  synthetic.py              GOAD-shaped fixture + seeded random AD generator
+  synthetic.py              GOAD-shaped fixture, seeded generator, GPO/RBCD fixtures
   planners/base.py          Path type and Planner protocol — all three planners share it
   planners/shortest_path.py Dijkstra baseline (planner #1 of 3)
-  cli.py                    inspect / path / freeze
+  planners/weighted_astar.py Weighted A* (planner #2 of 3)
+  cli.py                    inspect / path / compare / freeze
 tests/test_stage1.py        Stage 1 exit criteria
+tests/test_stage2.py        Stage 2 exit criteria
+tests/test_stage3_properties.py  Risk-model properties, incl. that each one bites
 ```
 
 ## Why the code is built this way
@@ -84,11 +99,12 @@ Each of these is load-bearing. Reversing one is a real decision, not a cleanup.
 ## Next
 
 1. Stand up GOAD and collect with SharpHound — `docs/stage1_lab_runbook.md`.
-2. Stage 2: fill in `ad_schema.ATTACK_MAPPING_STUB` (maps AD techniques to risk
-   weights, one real source per row) and build the weighted A\* planner.
+2. Source the risk weights. All 32 entries in `risk.PROVISIONAL_WEIGHTS` carry a
+   rationale but no citation, and `risk.require_sourced()` refuses to let an
+   unsourced weight back a reported number. Each one needs an ATT&CK technique
+   ID, a specific Sigma rule, or a named detection writeup.
 
-Step 2's mapping work needs no lab and no code, so it can start now, in parallel
-with the GOAD build.
+Neither step blocks the other, and step 2 needs no lab and no code.
 
 ## Scope
 

@@ -1,10 +1,18 @@
 {
   "collection": "third-party published SharpHound collection, not our own lab",
 
-  "supersedes": {
-    "sha256": "ff5a00f5c5b6a2f80471a80c98db751d37e1f61b12d14b939f1945544b0da2b2",
-    "why_it_changed": "Schema change only, no re-collection. SpoofSIDHistory was unknown to ad_schema when the first graph was frozen, so its 2 cross-forest edges were dropped; it is now categorised and weighted, so they load. Same source ZIPs, same ingest, same BloodHound instance. Anything citing the superseded hash is looking at a graph that cannot express the cross-forest move."
-  },
+  "current_sha256": "3c1bef97f75df7d224a1e35767cdb3bdf0cb3348b8dd8bbff0d777f924a65ba2",
+
+  "supersedes": [
+    {
+      "sha256": "ff5a00f5c5b6a2f80471a80c98db751d37e1f61b12d14b939f1945544b0da2b2",
+      "why_it_changed": "Schema change only, no re-collection. SpoofSIDHistory was unknown to ad_schema when this was frozen, so its 2 cross-forest edges were dropped; it is now categorised and weighted, so they load. Anything citing this hash is looking at a graph that cannot express the cross-forest move."
+    },
+    {
+      "sha256": "b427ef8aa0bf6afb76d80c3c1132d11adf82f7fddf83786deaa66c6811197fab",
+      "why_it_changed": "Line endings only - the graph content is byte-for-byte equivalent. This hash was not reproducible: AttackGraph.save() wrote platform-default line endings, so freezing the same collection on Linux would have produced a different hash, and core.autocrlf meant the blob git stored differed from the file on disk. save() now writes LF explicitly and .gitattributes marks data/*.json as -text. No re-collection, no re-ingest, no schema change; node/edge counts, provenance and all routes are identical."
+    }
+  ],
   "source_repo": "https://github.com/m4lwhere/Bloodhound-CE-Sample-Data",
   "source_files": [
     "NORTH_20240410083414_BloodHound-2.3.3.zip",

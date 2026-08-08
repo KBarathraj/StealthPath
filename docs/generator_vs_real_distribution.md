@@ -1,6 +1,6 @@
 # `random_ad()` vs the real collection — edge-type distribution
 
-**Measured 2026-08-04.** Real graph: `data/goad_graph.json`, sha256 `b427ef8a…`,
+**Measured 2026-08-04.** Real graph: `data/goad_graph.json`, sha256 `3c1bef97…`,
 783 nodes / 5825 edges. Generator: `synthetic.random_ad(seed=0..11)` aggregated,
 2570 edges. Percentages are of each population's own edge total.
 

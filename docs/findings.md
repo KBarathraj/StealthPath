@@ -16,7 +16,7 @@ Re-check anything marked as sensitive to weights once the sourcing pass lands.
 
 ## 2026-08-04 — First real routes on collected data
 
-**Graph:** `data/goad_graph.json`, sha256 `b427ef8a…` (supersedes `ff5a00f5…`)
+**Graph:** `data/goad_graph.json`, sha256 `3c1bef97…` (supersedes `b427ef8a…`, `ff5a00f5…`)
 **Collection:** published GOADv2 SharpHound 2.3.3, 2024-04-10 — see
 `data/collection_provenance.json`
 **Planners:** Dijkstra (unit cost) vs weighted A\* (`static_cost_fn`)

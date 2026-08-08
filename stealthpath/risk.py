@@ -60,6 +60,18 @@ __all__ = [
 WEIGHT_FLOOR = 0.1
 WEIGHT_CEILING = 10.0
 
+# Detection channels, split by baseline half. Every sourced weight must name at
+# least one from each half, using the NONE_FOUND value where a half was checked
+# and came back empty.
+NATIVE_SACL = "native_ad_sacl"            # 5136 / 4670 / 4662 - needs a SACL
+NATIVE_DEFAULT = "native_default_channel"  # 4624/4672/4724/4728/4769 - no SACL
+NATIVE_NONE_FOUND = "native_none_found"
+ENDPOINT_RULE = "endpoint_named_rule"      # shipped Sigma on Sysmon/4104/EDR
+ENDPOINT_NONE_FOUND = "endpoint_none_found"
+
+NATIVE_HALF = {NATIVE_SACL, NATIVE_DEFAULT, NATIVE_NONE_FOUND}
+ENDPOINT_HALF = {ENDPOINT_RULE, ENDPOINT_NONE_FOUND}
+
 
 @dataclass(frozen=True)
 class RiskWeight:
@@ -77,6 +89,30 @@ class RiskWeight:
     """The actual citation: ATT&CK ID, Sigma rule name, or detection writeup.
     While this is None the weight is a guess and must not back any reported
     number."""
+
+    channels: tuple[str, ...] = ()
+    """Which detection channels this weight rests on, one per baseline half.
+
+    Exists because of a specific failure. The Shape D edges were first derived
+    at 1.5 from native AD auditing alone — 5136/4670 need a SACL, so an ACL
+    write on an ordinary object emits nothing — while the baseline *also*
+    assumes EDR/Sysmon telemetry, which needs no SACL and does catch it. The
+    derivation was internally consistent and simply omitted half the evidence.
+    Nothing in prose made that omission visible.
+
+    Recording the channels makes "which halves were considered?" a structural
+    field rather than something buried in a paragraph, so
+    `test_sourced_weight_accounts_for_both_baseline_halves` can require an
+    answer for each. Use `NATIVE_NONE_FOUND` / `ENDPOINT_NONE_FOUND` to record a
+    half that was checked and came back empty — silence and absence must be
+    distinguishable.
+
+    Note honestly what this does and does not catch: it forces the question, and
+    it catches an unanswered one. It cannot catch a *wrong* answer — a weight
+    that declares `ENDPOINT_NONE_FOUND` when a rule does in fact exist looks
+    identical to one where none does. That failure is a literature-search
+    failure and only review catches it.
+    """
 
     conditional: dict[str, float] | None = None
     """Weights that apply only under a named condition, keyed by condition name.
@@ -166,6 +202,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # to the non-tier-zero case only. A cross-product encoding is Stage 3 work.
     "GenericWrite": RiskWeight(
         weight=4.0,
+        channels=(NATIVE_SACL, ENDPOINT_RULE),
         conditional={"target_is_tier_zero": 5.0, "target_is_gpo": 5.5,
                      "tooling_is_native_ldap": 1.5},
         rationale=(
@@ -203,6 +240,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "WriteAccountRestrictions": _w(4.5, "Narrow, unusual attribute write."),
     "GenericAll": RiskWeight(
         weight=4.0,
+        channels=(NATIVE_SACL, ENDPOINT_RULE),
         conditional={"target_is_tier_zero": 5.5, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: full control, so the chain is whichever of the others you "
@@ -228,6 +266,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     ),
     "WriteDacl": RiskWeight(
         weight=4.0,
+        channels=(NATIVE_SACL, ENDPOINT_RULE),
         conditional={"target_is_tier_zero": 5.5, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: write the DACL -> use the granted right. Two actions.\n"
@@ -251,6 +290,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     ),
     "WriteOwner": RiskWeight(
         weight=4.0,
+        channels=(NATIVE_SACL, ENDPOINT_RULE),
         conditional={"target_is_tier_zero": 6.0, "tooling_is_native_ldap": 1.5},
         rationale=(
             "Chain: take ownership -> write the DACL -> use the right. THREE "
@@ -304,6 +344,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # rate, and that is a difference of degree, not kind.
     "AllowedToDelegate": RiskWeight(
         weight=4.0,
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
         rationale=(
             "The discriminator is real but conditionally cancelled. 4769 with "
             "Transited Services populated is a genuine structural marker in a "
@@ -340,6 +381,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     ),
     "AllowedToAct": RiskWeight(
         weight=4.5,
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
         rationale=(
             "Same edge semantics as AllowedToDelegate — the right already "
             "exists on the target — so the same cancellation applies: an "
@@ -361,6 +403,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     ),
     "AddAllowedToAct": RiskWeight(
         weight=5.0,
+        channels=(NATIVE_SACL, ENDPOINT_NONE_FOUND),
         conditional={"target_is_tier_zero": 6.0},
         rationale=(
             "Adds the attribute *write* to AllowedToAct's use, and the write is "
@@ -398,6 +441,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # use of the ticket, not the krbtgt compromise that precedes it.
     "SpoofSIDHistory": RiskWeight(
         weight=3.5,
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
         rationale=(
             "Forged TGTs carrying spoofed SID history produce ordinary-looking "
             "4768/4769 events. The tickets are cryptographically valid, so "
@@ -431,6 +475,13 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # does by itself. Weighted only so the GPO expansion view can be costed.
     "GPLink": RiskWeight(
         weight=0.1,
+        # NONE_FOUND, not SACL: the *link* emits nothing. What
+        # win_security_gpo_scheduledtasks.yml fires on is the GPO content write,
+        # and that is priced on the ACL edge onto the GPO. Mislabelling this as
+        # SACL-dependent was caught by
+        # test_a_sacl_only_weight_declares_a_tier_conditional - a SACL-only
+        # weight must split by tier, and this one has nothing to split.
+        channels=(NATIVE_NONE_FOUND, ENDPOINT_NONE_FOUND),
         rationale=(
             "Policy application, not an action. Charging for it would "
             "double-count the GPO write already priced on the ACL edge. An "
@@ -452,6 +503,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     ),
     "Contains": RiskWeight(
         weight=0.1,
+        channels=(NATIVE_NONE_FOUND, ENDPOINT_NONE_FOUND),
         rationale=(
             "Pure containment. Nothing happens when an OU holds an object; "
             "walking it is not an act. Weighted at the floor rather than zero "

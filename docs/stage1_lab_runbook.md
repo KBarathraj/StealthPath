@@ -92,6 +92,39 @@ Prefer naming these explicitly over relying on BloodHound's `owned`/high-value
 markings. Markings drift as people click around the UI; a documented list
 doesn't. The CLI takes `--from` / `--to` for exactly this reason.
 
+**Target-set policy (settled).** With no `--to`, the default is
+`AttackGraph.tier0_targets()`: Domain Admins groups, Enterprise Admins groups,
+and domain objects. The domain object counts because replication rights live on
+the domain, not in any group — an attacker holding them has won without ever
+touching Domain Admins, and a DA-group-only target set silently drops that whole
+class of route. Enterprise Admins counts because it is forest-wide admin.
+Identified by well-known name, never by BloodHound's high-value marking.
+
+This does *not* re-admit `Contains`: these are endpoints reached by traversing
+onto them, never waypoints walked down from.
+
+**Open: domain controller computer objects.** They belong in the target set by
+the same argument — admin on a DC is domain compromise — but we have no reliable
+way to identify one yet, so they are deliberately absent rather than guessed at:
+
+- The synthetic fixture tags DCs with an invented `is_dc` node property.
+  **Real SharpHound output has no such property**, so keying on it would work in
+  tests and silently match nothing on the real collection. That is the trap.
+- BloodHound's actual signal is the **`DCFor` edge** (`Computer -DCFor-> Domain`).
+  `ad_schema.EDGE_CATEGORIES` does not know that type, so **the load will now
+  fail outright** naming `DCFor` — the loader enforces rule 4 rather than
+  filtering quietly. That failure is the confirmation the edge is in your data.
+  Categorise it, then decide the target-set question. If you need to look at the
+  collection before categorising, `drop_unknown_edges=True` records what it
+  discarded in `graph.provenance`, which is written into the frozen JSON.
+  One caveat: `DCFor` is not emitted for read-only DCs, so it is not a complete
+  list on its own.
+- The membership route (the built-in `Domain Controllers` group, RID `-516`) is
+  the fallback if `DCFor` turns out to be absent.
+
+Decide this once you have a real collection in front of you and can see which
+signals are actually there.
+
 ---
 
 ## 4. Run the milestone check
@@ -152,13 +185,15 @@ tie-breaking isn't ours, and a different path of the same length is fine.
 | Shortest-path (Dijkstra) baseline | Done: `planners/shortest_path.py` |
 | Milestone check vs. BloodHound | Done: `cli path --verify` |
 
-Run `pytest` now, before the lab exists — 37 tests pass against the synthetic
-fixture. That means when the real graph lands, any failure is about *your data*,
-not the code, which makes debugging enormously faster.
+Run `pytest` now, before the lab exists — `110 passed, 3 skipped` against the
+synthetic fixture. That means when the real graph lands, any failure is about
+*your data*, not the code, which makes debugging enormously faster.
 
-One of those tests cross-checks our Dijkstra against networkx and will error out
-with `ModuleNotFoundError` if you skipped `pip install -r requirements.txt`.
-That's a missing dependency, not a code failure.
+The 3 skips are Stage 3 properties waiting on a model that doesn't exist yet;
+each names what it's blocked on. If you also skipped
+`pip install -r requirements.txt` you'll see `109 passed, 4 skipped` — the extra
+one is the Dijkstra-vs-networkx cross-check. Anything *failing* is a real
+failure.
 
 ---
 

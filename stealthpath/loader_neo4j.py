@@ -24,7 +24,7 @@ from .graph import AttackGraph, Node
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Neo4jLoader", "NODE_QUERY", "EDGE_QUERY"]
+__all__ = ["Neo4jLoader", "admit_edge", "jsonable", "NODE_QUERY", "EDGE_QUERY"]
 
 
 NODE_QUERY = """
@@ -74,6 +74,54 @@ def _is_high_value(props: dict[str, Any]) -> bool:
     if isinstance(tags, (list, tuple)):
         tags = " ".join(str(t) for t in tags)
     return "admin_tier_0" in str(tags)
+
+
+def jsonable(value: Any) -> Any:
+    """Coerce a Neo4j property value into something `json.dumps` accepts.
+
+    BloodHound stores temporals — `lastseen`, `whencreated`, `lastlogon` — as
+    Neo4j `DateTime` objects, and the driver hands them back as such. They
+    survive in memory and blow up at `graph.save()`, which is the worst possible
+    place to find out: after a collection, at the exact moment rule 6 says to
+    freeze. The synthetic fixture has no temporals, so nothing caught this until
+    the first real graph.
+
+    ISO strings rather than epoch numbers, because the value is only ever read
+    by a human checking provenance.
+    """
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): jsonable(v) for k, v in value.items()}
+    iso = getattr(value, "isoformat", None)
+    return iso() if callable(iso) else str(value)
+
+
+def admit_edge(rel_type: str, drop_unknown: bool = False) -> bool:
+    """Rule 4 at the collection boundary: True to keep, False to drop, or raise.
+
+    A free function so the rule is testable with no database — the loader class
+    can't be constructed without a live driver, which is precisely how this
+    check went unexercised long enough for the `DCFor` gap to exist.
+    """
+    from .ad_schema import category_of
+
+    try:
+        category_of(rel_type)
+        return True
+    except KeyError:
+        if drop_unknown:
+            return False
+        raise KeyError(
+            f"Collection contains relationship type {rel_type!r}, which "
+            f"ad_schema.EDGE_CATEGORIES does not know. Categorise it before "
+            f"loading — an uncategorised edge would take a made-up cost later "
+            f"and skew every number downstream. To triage the collection "
+            f"first, load with drop_unknown_edges=True; what it discards is "
+            f"recorded in graph.provenance and travels with the frozen graph."
+        ) from None
 
 
 def _is_owned(props: dict[str, Any]) -> bool:
@@ -130,23 +178,33 @@ class Neo4jLoader:
                     yield dict(record)
                 skip += self._page_size
 
-    def load(self, drop_unknown_edges: bool = True) -> AttackGraph:
+    def load(self, drop_unknown_edges: bool = False) -> AttackGraph:
         """Build the full graph.
 
-        `drop_unknown_edges`: relationship types not present in
-        `ad_schema.EDGE_CATEGORIES` are dropped with a warning rather than
-        silently admitted. If you see warnings here, that is a real finding —
-        either your BloodHound version has edges the schema module doesn't know
-        about, or the collection picked up something unexpected. Resolve it
-        before Stage 2 rather than after.
-        """
-        from .ad_schema import EDGE_CATEGORIES
+        **Unknown relationship types raise.** Every type is put through
+        `category_of()`, which throws on anything the schema doesn't know. That
+        is the project's rule, and it used to be enforced everywhere *except*
+        here: this loader ran its own membership test and quietly `continue`d,
+        so the one code path where an unexpected type actually shows up — a real
+        collection — was the one path that didn't raise. `DCFor` is the concrete
+        example; it exists in BloodHound CE, the schema has never known about
+        it, and it was being discarded without ever reaching `category_of`.
 
+        Worse, `cli inspect`'s uncategorised-type check reads the *loaded*
+        graph, so it could only ever see types that survived this filter. The
+        detector sat downstream of the thing destroying the evidence.
+
+        `drop_unknown_edges=True` is the deliberate escape hatch for triaging a
+        collection you cannot yet fix. It records what it discarded in
+        `graph.provenance`, which is serialised with the frozen graph — a
+        dropped edge must not be knowable only from a log line that scrolled
+        past six weeks ago.
+        """
         graph = AttackGraph()
 
         n_nodes = 0
         for rec in self._paged(NODE_QUERY):
-            props = dict(rec.get("props") or {})
+            props = {k: jsonable(v) for k, v in (rec.get("props") or {}).items()}
             labels = list(rec.get("labels") or [])
             graph.add_node(Node(
                 id=rec["objectid"],
@@ -166,12 +224,13 @@ class Neo4jLoader:
         missing_endpoint = 0
         for rec in self._paged(EDGE_QUERY):
             rel = rec["rel_type"]
-            if drop_unknown_edges and rel not in EDGE_CATEGORIES:
+            if not admit_edge(rel, drop_unknown_edges):
                 dropped[rel] = dropped.get(rel, 0) + 1
                 continue
             try:
                 graph.add_edge(rec["source"], rec["target"], rel,
-                               dict(rec.get("props") or {}))
+                               {k: jsonable(v)
+                                for k, v in (rec.get("props") or {}).items()})
                 kept += 1
             except KeyError:
                 # Endpoint outside the node query (e.g. objectid-less node).
@@ -182,4 +241,11 @@ class Neo4jLoader:
             log.warning("dropped unknown relationship types: %s", dropped)
         if missing_endpoint:
             log.warning("dropped %d edges with unresolvable endpoints", missing_endpoint)
+
+        # Travels with the graph, not just the log. Only recorded when something
+        # was actually discarded, so a clean collection freezes to a clean file.
+        if dropped:
+            graph.provenance["dropped_unknown_edge_types"] = dict(sorted(dropped.items()))
+        if missing_endpoint:
+            graph.provenance["dropped_edges_missing_endpoint"] = missing_endpoint
         return graph

@@ -1,0 +1,4 @@
+# The frozen graph is ground truth and is cited by sha256 throughout the docs.
+# Line-ending translation on checkout would change that hash, which defeats the
+# entire point of citing it. Store and emit these bytes exactly as written.
+data/*.json -text

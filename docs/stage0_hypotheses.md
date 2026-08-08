@@ -154,6 +154,60 @@ not two regimes.
 
 ---
 
+## Added 2026-08-05 with the merged framing — H1–H4 above are untouched
+
+Nothing above this line was edited. H1–H4 are byte-identical to the
+pre-registered versions; the merged abstract did not require changing any of
+them, which is itself worth recording.
+
+> ⚠️ **Provenance note on H5.** H5 is referenced as pre-existing but does not
+> appear in this file, which has only ever held H1–H4. It presumably lives in the
+> project plan, which is not in the repository. The statement below is a
+> reconstruction from the instruction "H5 stays but gains the affected-region
+> measurement" — **check it against the original before relying on it**, and if
+> the wording differs, the original wins.
+
+### H5 — incremental retraining after graph change *(reconstructed, plus the new measurement)*
+
+> **H5:** After a permission change, retraining restricted to the affected region
+> recovers the same solution quality as full retraining, at lower cost.
+>
+> **Added:** the affected region is identified by graph diff plus reverse BFS
+> from the changed edges, and its size is *measured* rather than assumed.
+
+- **Test:** apply a change, compute the BFS-predicted affected region, retrain
+  only within it, compare final optimality gap against full retraining.
+- **Note the efficiency caveat from the abstract:** on 783 nodes, full retraining
+  is cheap enough that a saving here is not by itself a result. H5's value is the
+  measurement in H6, not the speedup.
+
+### H6 — the invalidated region exceeds the graph neighbourhood *(new)*
+
+> **H6:** Under a history-dependent cost model, the region whose optimal routes
+> are invalidated by a single realistic permission change is **larger** than the
+> graph neighbourhood of that change.
+>
+> **H6₀:** The invalidated region is contained within the BFS-predicted
+> neighbourhood.
+
+- **Rationale:** with history-independent costs, a change can only affect routes
+  passing through it, so reverse BFS bounds the damage exactly. Once cost depends
+  on what the attacker has already done, a change can alter the *relative* cost
+  of routes that never touch the changed edge — because it changes which history
+  a cheaper route arrives with. If that happens, selective retraining scoped by
+  BFS is unsound, and the BFS bound is a heuristic rather than a guarantee.
+- **Test:** for each of N sampled realistic permission changes, compute the
+  BFS-predicted region and the observed set of nodes whose optimal route changed.
+  Report the fraction of observed changes falling outside the prediction, and the
+  size ratio.
+- **This is falsifiable in a useful direction either way.** If the two regions
+  coincide, that is also a result: it says BFS-scoped retraining is sound under
+  history-dependent cost, which is a licence for the engineering in H5. A
+  hypothesis whose negative outcome is equally publishable is the right shape.
+- **Failure mode to watch:** "realistic permission change" must be fixed before
+  measuring. Cherry-picking changes that maximise spillover would confirm H6
+  trivially. Draw them from the actual ACL distribution of the frozen graph.
+
 ## Outcome log (fill in during Stage 5 — nothing above this line changes)
 
 | Hypothesis | Supported? | Effect size | CI | Notes |

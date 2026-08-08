@@ -53,6 +53,7 @@ docs/
   stage1_lab_runbook.md     GOAD + SharpHound checklist and the milestone gate
   stage2_joint_capability_audit.md   Edges that overstate what an attacker holds
   stage3_risk_model_properties.md    Properties the risk model must satisfy
+  handoff.md                Start here if picking the project up
   findings.md               Running log of real results, each tied to a graph hash
   generator_vs_real_distribution.md  Why random_ad cannot back distributional claims
   stage0_related_work.md    PARKED — research phase, after Stage 5

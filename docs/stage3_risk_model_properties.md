@@ -252,6 +252,70 @@ Two caveats before relying on generated graphs:
 - **`goad_like()` covers 16 of 29 walkable edge types.** Properties that need a
   specific technique present must assert it, not assume it.
 
+## Reduced gate — closing Stage 3 in one week, not three
+
+Stage 3 is the schedule risk and everything downstream sits on it. This is the
+cut-down version that still closes the gate, with what is deferred and why.
+
+**The cut is by load-bearing-ness, not by effort.** A property is load-bearing if
+its failure would make the three-planner comparison *wrong* rather than
+*incomplete*.
+
+### Properties: 16 → 8 required
+
+| Keep | Why it is load-bearing |
+|---|---|
+| **P6** exact static reduction | If the regimes are secretly different models, every comparison measures an implementation gap. Nothing else matters if this fails. |
+| **P7** static ignores history | The other half of P6 — a leaking history term invalidates the static arm. |
+| **P1** repetition never reduces risk | Without it the adaptive model can be gamed by padding, which inverts the whole objective. |
+| **P2** same technique strictly louder | The actual substance of "adaptive". If it can be zero, the adaptive model degenerates to static undetected. |
+| **P9** strict positivity | Planner correctness, not just modelling: a zero lets a route accumulate unlimited free hops. |
+| **P14** determinism | Two runs must agree or no comparison means anything. |
+| **P12** relabelling invariance | Motivated by a real artifact already in the repo — index-order sensitivity in tie-breaks. In the risk model it would make scores depend on SharpHound row order. |
+| **P15** gradient, not cliff | If any repetition is catastrophic, the adaptive planner wins trivially and the headline result is an artifact of tuning. |
+
+**Deferred (8):** P3, P4, P8, P10, P11 all need the `P_detect` route scorer,
+which is Stage 3 work in its own right — they are *completeness* over route-level
+scoring and none of them can make a planner comparison wrong. P5 needs a target
+severity ordering that now exists but is unexercised (no comparable pairs in the
+frozen graph). P13 (locality) and P16 (monotone in penalty) are hygiene: real,
+but their failure produces implausible numbers rather than wrong conclusions.
+
+**Already implemented: 6 of the 8** — P6, P7, P9, P12, P14 plus P13 (which is in
+the deferred list but was cheap and is done). **Remaining work: P1, P2, P15**,
+all three of which require the history-dependent model to exist first, so they
+are written alongside it rather than before it.
+
+### Weights: 35 → 12 required
+
+Gated by route influence — an edge type appearing on either the **chosen** or the
+**rejected** route for `SAMWELL.TARLY`, `SQL_SVC` or `TYWIN.LANNISTER` on the
+frozen graph.
+
+**13 edge types qualify. 1 is already sourced (`GPLink`), so 12 remain:**
+
+```
+GenericWrite  WriteDacl  WriteOwner  GenericAll        <- Shape D, next pass
+MemberOf      AdminTo    SQLAdmin    HasSession
+DCSync        ForceChangePassword    AddMember  AddSelf
+```
+
+**Deferred: 17 weights** that sit in the table but on no observed route. They
+are not wrong to have — a different entry point would exercise them — but they
+cannot change any number currently reported, so they do not gate anything.
+
+Note `Owns` is **not** in the required set despite being 12.4% of the graph, and
+`GenericAll` is required only because it appears on `TYWIN`'s route — its
+perturbation test showed no route change at ±1.5. Edge count is a poor proxy for
+influence; this list is measured, not estimated.
+
+### What this buys
+
+Gate closes on **8 properties (3 to write) and 12 weights (all 12 to source)**
+instead of 16 and 35. The deferred items stay in their documents with reasons
+attached, and become completeness work after the build phase rather than
+prerequisites to it.
+
 ## Suggested order
 
 P6 and P7 first — they are the ones whose failure invalidates everything

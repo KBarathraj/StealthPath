@@ -147,6 +147,79 @@ def test_primary_kind_survives_labels_it_has_never_seen():
     assert _primary_kind([]) == "Unknown"
 
 
+def test_loader_raises_on_unknown_relationship_type():
+    """Rule 4 at the collection boundary. This used to be the one path that
+    *didn't* raise: the loader ran its own membership test and silently
+    dropped, so the only place an unexpected type actually appears — a real
+    collection — was the only place the rule wasn't enforced. `DCFor` is the
+    real-world case that exposed it."""
+    from stealthpath.loader_neo4j import admit_edge
+    assert admit_edge("MemberOf") is True
+    with pytest.raises(KeyError, match="does not know"):
+        admit_edge("DCFor")
+
+
+def test_loader_can_drop_unknown_types_only_when_asked():
+    from stealthpath.loader_neo4j import admit_edge
+    assert admit_edge("DCFor", drop_unknown=True) is False
+    assert admit_edge("MemberOf", drop_unknown=True) is True
+
+
+def test_neo4j_temporals_survive_the_freeze(tmp_path):
+    """BloodHound stores `lastseen`/`whencreated` as Neo4j DateTime objects.
+    They pass through the loader fine and then blow up at `save()` — after a
+    collection, at the exact moment rule 6 says to freeze. The synthetic fixture
+    has no temporals, so nothing caught this until the first real graph."""
+    from stealthpath.loader_neo4j import jsonable
+
+    class FakeDateTime:
+        def isoformat(self):
+            return "2024-04-10T08:34:14+00:00"
+
+    assert jsonable(FakeDateTime()) == "2024-04-10T08:34:14+00:00"
+    assert jsonable({"seen": FakeDateTime()}) == {"seen": "2024-04-10T08:34:14+00:00"}
+    assert jsonable([FakeDateTime(), 1, "x", None]) == \
+        ["2024-04-10T08:34:14+00:00", 1, "x", None]
+
+    g = AttackGraph()
+    g.add_node(Node("a", "A", "User", props={"lastseen": FakeDateTime()}))
+    with pytest.raises(TypeError):
+        json.dumps(g.to_dict())          # the failure, reproduced
+
+    g2 = AttackGraph()
+    g2.add_node(Node("a", "A", "User",
+                     props={k: jsonable(v) for k, v in {"lastseen": FakeDateTime()}.items()}))
+    path = tmp_path / "g.json"
+    g2.save(path)
+    assert AttackGraph.load(path).node("a").props["lastseen"].startswith("2024-04-10")
+
+
+def test_provenance_survives_the_freeze(goad, tmp_path):
+    """A drop recorded only in a log line is a drop nobody will ever find. The
+    frozen JSON is what every later run reads, so it has to carry the record."""
+    goad.provenance["dropped_unknown_edge_types"] = {"DCFor": 3}
+    path = tmp_path / "g.json"
+    goad.save(path)
+    assert AttackGraph.load(path).provenance == {"dropped_unknown_edge_types": {"DCFor": 3}}
+
+
+def test_graphs_frozen_before_provenance_existed_still_load(goad, tmp_path):
+    data = goad.to_dict()
+    del data["provenance"]
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert AttackGraph.load(path).provenance == {}
+
+
+def test_freezing_identical_data_produces_an_identical_file(goad, tmp_path):
+    """No timestamp in provenance, on purpose: a re-freeze of unchanged data
+    must not churn the committed file."""
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    goad.save(a)
+    goad.save(b)
+    assert a.read_text(encoding="utf-8") == b.read_text(encoding="utf-8")
+
+
 def test_high_value_detected_under_both_bloodhound_generations():
     assert _is_high_value({"highvalue": True})                       # legacy 4.x
     assert _is_high_value({"system_tags": ["admin_tier_0"]})         # CE, list
@@ -193,8 +266,16 @@ def test_unit_cost_equals_hop_count(goad):
 
 def test_agrees_with_networkx_on_shortest_length(goad):
     """Independent cross-check. If our Dijkstra and networkx disagree on
-    length, ours is wrong."""
-    import networkx as nx
+    length, ours is wrong.
+
+    networkx is the one dependency any test here needs, and it is in
+    requirements.txt. Skipping rather than erroring when it is absent keeps a
+    bare `pytest` on a fresh checkout readable: a clean SKIPPED line naming the
+    fix, instead of a traceback that looks like a code failure. It cost us that
+    confusion once already.
+    """
+    nx = pytest.importorskip(
+        "networkx", reason="pip install -r requirements.txt (dev cross-check)")
 
     traversable = goad.filtered(DEFAULT_TRAVERSAL_SET)
     nxg = nx.DiGraph()

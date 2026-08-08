@@ -21,6 +21,10 @@ __all__ = [
     "EDGE_CATEGORIES",
     "TRAVERSABLE_EDGES",
     "STRUCTURAL_EDGES",
+    "PARTIAL_RIGHT_EDGES",
+    "GPO_EXPANSION_EDGES",
+    "LOCAL_ADMIN_EXPANSION_EDGES",
+    "PRIVILEGED_LOCAL_GROUP_RIDS",
     "DEFAULT_TRAVERSAL_SET",
     "category_of",
     "ATTACK_MAPPING_STUB",
@@ -109,14 +113,149 @@ EDGE_CATEGORIES: dict[str, str] = {
     "GPLink": _C.STRUCTURAL,
 
     # --- trusts -----------------------------------------------------------
-    "TrustedBy": _C.TRUST,
+    # `TrustedBy` was retired: current BloodHound does not emit it. SpecterOps
+    # replaced the single catch-all with a set that separates the *existence* of
+    # a trust from the *abuse* of one — SameForestTrust / CrossForestTrust carry
+    # the relationship and its metadata, while AbuseTGTDelegation and
+    # SpoofSIDHistory are the actual attacks across it.
+    #
+    # The first two are structural for the same reason Contains and GPLink are:
+    # a trust existing is a fact about the directory, not a step an attacker
+    # takes. Traversing one would let a planner cross a forest boundary for free
+    # when the real crossing costs a specific, expensive technique.
+    "SameForestTrust": _C.STRUCTURAL,
+    "CrossForestTrust": _C.STRUCTURAL,
+
+    # Traversable, unlike the two above: this is the attack *across* a trust
+    # rather than the trust itself. Domain -> Domain, landing on a node already
+    # in tier0_targets(). See the audit doc for what it understates, and
+    # docs/stage3_risk_model_properties.md for the krbtgt precondition that a
+    # static model cannot express.
+    "SpoofSIDHistory": _C.TRUST,
+
+    # --- local groups -----------------------------------------------------
+    # BloodHound CE's local-admin model: Principal -MemberOfLocalGroup->
+    # LocalGroup -LocalToComputer-> Computer. Where the local group is
+    # Administrators, that chain is semantically `AdminTo`.
+    #
+    # Both are structural by default, and that is a safety decision rather than
+    # a semantic one. `LocalToComputer` runs out of *every* local group on a
+    # machine — Users, Guests, IIS_IUSRS, Pre-Windows 2000 Compatible Access —
+    # not just the privileged ones. Admitting it wholesale would mean membership
+    # in local `Users` reaches the computer, and since effectively every domain
+    # account is in local Users on every machine, every principal would "reach"
+    # every DC. Same failure as WriteGPLink, different door.
+    #
+    # `AttackGraph.with_local_admin_expansion()` re-admits the chain for the
+    # privileged local groups only.
+    "MemberOfLocalGroup": _C.STRUCTURAL,
+    "LocalToComputer": _C.STRUCTURAL,
 }
+"""Note: `EdgeCategory.TRUST` currently has no members. It is kept for
+`SpoofSIDHistory`, which is a genuine attacker action across a trust and is
+pending a risk weight before it can be admitted — see the round report."""
 
 STRUCTURAL_EDGES = frozenset(
     r for r, c in EDGE_CATEGORIES.items() if c == _C.STRUCTURAL
 )
 
-TRAVERSABLE_EDGES = frozenset(EDGE_CATEGORIES) - STRUCTURAL_EDGES
+PARTIAL_RIGHT_EDGES = frozenset({
+    "GetChanges", "GetChangesAll", "GetChangesInFilteredSet",
+    "WriteGPLink",
+})
+"""Rights that are never sufficient on their own, so a planner must not walk them.
+
+Traversing a half-right lets a planner claim a capability the attacker does not
+have — and price it *cheaper* than the real thing, because one right costs less
+than two. That combination, wrong and cheap, is what makes these actively
+attractive to a cost-minimising search: it will seek them out.
+
+Two different shapes end up here.
+
+**Replication — two rights, one composite.** `GetChanges` + `GetChangesAll` is
+DCSync; `GetChanges` + `GetChangesInFilteredSet` is the LAPS replication read.
+Both halves run between the same two nodes, and BloodHound already emits the
+sufficient combination as its own edge (`DCSync`, `SyncLAPSPassword`) for exactly
+this reason. Excluding the halves loses nothing: the composite remains, walkable
+and correctly priced.
+
+**WriteGPLink — two rights, no composite.** Linking a GPO to an OU or domain
+does nothing unless you separately control a GPO worth linking, and that control
+is a different edge onto a *different node of a different kind* (an ACL right
+onto a GPO). There is no `GPOAppliesTo`-style composite in BloodHound to fall
+back on, so excluding this removes a capability rather than replacing it.
+
+That is acceptable because the capability was never expressible anyway: holding
+two rights out of one node simultaneously is not something a path can represent.
+The only thing traversing `WriteGPLink` ever contributed was false routes — and
+the worst was not the GPO chain but a *single hop*, since BloodHound permits a
+domain object as a `WriteGPLink` target and domain objects are tier-0. One edge,
+straight to full domain compromise, cheaper than DCSync. See
+`test_writegplink_into_a_domain_is_not_a_route`.
+
+The real GPO chain is unaffected: it runs `GenericWrite -> GPLink -> Contains`
+onto an already-linked GPO and never touches `WriteGPLink`. See
+`AttackGraph.with_gpo_expansion`.
+"""
+
+TRAVERSABLE_EDGES = (frozenset(EDGE_CATEGORIES)
+                     - STRUCTURAL_EDGES - PARTIAL_RIGHT_EDGES)
+"""Relationship types a planner may actually walk.
+
+Two exclusions, for two different reasons. `STRUCTURAL_EDGES` are directory
+layout rather than actions. `PARTIAL_RIGHT_EDGES` are real rights that simply
+are not sufficient alone, and have a composite edge representing the sufficient
+combination.
+"""
+
+GPO_EXPANSION_EDGES = frozenset({"GPLink", "Contains"})
+"""Structural edges re-admitted *only* for the GPO -> OU -> object expansion.
+
+This is the scoped exception the note below anticipated. Controlling a GPO's
+content is a real attack, but the effect only reaches actual objects by
+following `GPLink` down to an OU and `Contains` down to what the OU holds — two
+edges excluded by default precisely because, used generally, they invent
+connectivity no attacker action corresponds to.
+
+The exception is *contextual*, not a set membership change, and cannot be
+expressed by widening a traversal set: `GPLink` is walkable only from a GPO, and
+`Contains` only from an OU or Container. `AttackGraph.with_gpo_expansion()`
+builds the view that enforces it. The general Domain -Contains-> group shortcut,
+which is what rule 3 exists to block, stays blocked because its source is a
+Domain rather than an OU.
+
+Use `DEFAULT_TRAVERSAL_SET | GPO_EXPANSION_EDGES` as the traversal set when
+planning over that view, never against a raw graph.
+"""
+
+LOCAL_ADMIN_EXPANSION_EDGES = frozenset({"MemberOfLocalGroup", "LocalToComputer"})
+"""The local-group chain, re-admitted only for privileged local groups.
+
+Paired with `PRIVILEGED_LOCAL_GROUP_RIDS` and
+`AttackGraph.with_local_admin_expansion()`. Same shape as the GPO exception:
+the edge types are fine, it is the *source* that decides whether walking them
+means anything.
+"""
+
+PRIVILEGED_LOCAL_GROUP_RIDS = {
+    "544": "Administrators",        # local admin -> price as AdminTo
+    "555": "Remote Desktop Users",  # interactive logon -> price as CanRDP
+}
+"""Local groups whose membership actually confers access, by well-known RID.
+
+Keyed on RID rather than name on purpose: BloodHound names these
+`ADMINISTRATORS@DOMAIN`, but group names are localised in non-English
+installations while `S-1-5-32-544` is not. The objectids in a real collection
+look like `NORTH.SEVENKINGDOMS.LOCAL-S-1-5-32-544`.
+
+Deliberately short. `Distributed COM Users` (562) is the obvious next candidate
+and maps to ExecuteDCOM, but it is not present in the current collection so it
+is left out rather than added speculatively.
+
+**Sourcing note:** when the weights pass reaches these, membership of 544 prices
+as `AdminTo` and 555 as `CanRDP` — the chain is those techniques, reached a
+different way, not a new technique.
+"""
 
 DEFAULT_TRAVERSAL_SET = TRAVERSABLE_EDGES
 """What the planners traverse unless told otherwise.
@@ -146,6 +285,11 @@ def category_of(rel_type: str) -> str:
 
 # ---------------------------------------------------------------------------
 # STAGE 2 WORKSHEET — Cyber Track fills this in, with a citation per row.
+#
+# The weights themselves now live in `risk.py`, which is also where the verified
+# `technique=` and `source=` fields belong once you have confirmed them. This
+# table stays as the candidate-hint worksheet: it is where the guessing happens,
+# risk.py is where the answers land.
 # ---------------------------------------------------------------------------
 # Every weight needs to trace to an ATT&CK technique ID, a specific Sigma rule,
 # or a named detection writeup. Candidate techniques are noted below as

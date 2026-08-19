@@ -9,8 +9,11 @@ Three planners, same graph, same start and end points:
    is what BloodHound's own pathfinding does.
 2. **Smarter static planner (A\*)** — weights each relationship by how likely it
    is to get noticed, then finds the cheapest route under those weights.
-3. **Learning planner (PPO)** — learns to avoid loud actions and adapts as it
-   goes, so it can react to the fact that repeating a technique gets louder.
+3. **Learning planner (tabular Q-learning)** — learns to avoid loud actions and
+   adapts as it goes, so it can react to the fact that repeating a technique
+   gets louder. PPO was the original plan; the state space turned out small
+   enough for a tabular learner *and* for exact search, which is what lets the
+   learner be scored as an optimality gap rather than a training curve.
 
 The question the tool answers: does the learning planner actually beat a
 well-tuned static one at staying quiet, and does that depend on risk changing
@@ -25,7 +28,7 @@ the next thing to do.
 ```bash
 python -m venv .venv && .venv/Scripts/activate     # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                                    # 120 pass + 3 skipped, no network, no database
+pytest -q                                    # 187 pass + 2 skipped, no network, no database
 ```
 
 ```bash
@@ -117,10 +120,11 @@ Each of these is load-bearing. Reversing one is a real decision, not a cleanup.
 ## Next
 
 1. Stand up GOAD and collect with SharpHound — `docs/stage1_lab_runbook.md`.
-2. Source the risk weights. All 32 entries in `risk.PROVISIONAL_WEIGHTS` carry a
-   rationale but no citation, and `risk.require_sourced()` refuses to let an
-   unsourced weight back a reported number. Each one needs an ATT&CK technique
-   ID, a specific Sigma rule, or a named detection writeup.
+2. Finish sourcing the risk weights. 21 of the 35 entries in
+   `risk.PROVISIONAL_WEIGHTS` now carry a citation — an ATT&CK technique ID, a
+   named SigmaHQ rule, or a named detection writeup — including all 13 that gate
+   Stage 3. The remaining 14 sit on no observed route and are deliberately
+   deferred; `risk.require_sourced()` still refuses the table as a whole.
 
 Neither step blocks the other, and step 2 needs no lab and no code.
 

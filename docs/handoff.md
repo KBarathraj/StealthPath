@@ -1,7 +1,6 @@
 # Handoff
 
-**As of 2026-08-05.** `120 passed, 3 skipped`. Branch `main`, 13 commits, clean
-tree. Everything below runs with no network, no database, no lab.
+**As of 2026-08-10.** `187 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
 
 Read `CLAUDE.md` first for the build rules, then this. To find your way around
 the code without reading it all, use the graph index — see "Finding your way
@@ -79,6 +78,24 @@ is what had to land before `DCSync` was priced.
 ---
 
 ## Decisions that would be expensive to re-derive
+
+- **The unpinned figure set is known, not assumed empty.** A deliberate sweep on
+  2026-08-10 checked every number in live claim text against its source.
+  Everything derivable is pinned by `tests/test_reported_figures.py`: the
+  concentration figures (79.4% modal share, 95.3% `acl_abuse`, HHI 0.654 and
+  0.909), the superseded 80.4% and why it is a different measurement, both |S|
+  figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
+  weights, and the H5/H6 artifact values.
+
+  **Hand-maintained, and it is the pytest counts.** `187 passed, 2 skipped`
+  appears in `README.md`, `CLAUDE.md`, `handoff.md` and
+  `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
+  count expands `parametrize` and so differs from the AST function count in
+  `tests/test_inventory.json` (111 vs 123 when that gap was last measured), and
+  running pytest inside pytest to obtain it is not acceptable. The sweep found
+  all four stale, plus two stale claims in `README.md` (32 unsourced weights,
+  and the learner described as PPO when it is tabular Q-learning). **Update
+  these four by hand whenever the suite count changes.**
 
 - **Provenance is split across two files and neither says so.** The human
   narrative — why the collection was chosen, what the known gaps are — lives in

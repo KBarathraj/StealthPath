@@ -185,15 +185,16 @@ tie-breaking isn't ours, and a different path of the same length is fine.
 | Shortest-path (Dijkstra) baseline | Done: `planners/shortest_path.py` |
 | Milestone check vs. BloodHound | Done: `cli path --verify` |
 
-Run `pytest` now, before the lab exists — `110 passed, 3 skipped` against the
+Run `pytest` now, before the lab exists — `187 passed, 2 skipped` against the
 synthetic fixture. That means when the real graph lands, any failure is about
 *your data*, not the code, which makes debugging enormously faster.
 
-The 3 skips are Stage 3 properties waiting on a model that doesn't exist yet;
-each names what it's blocked on. If you also skipped
-`pip install -r requirements.txt` you'll see `109 passed, 4 skipped` — the extra
-one is the Dijkstra-vs-networkx cross-check. Anything *failing* is a real
-failure.
+The 2 skips are route-level properties waiting on the `P_detect` scorer and
+P5's target-severity ordering; each names what it's blocked on. If you also
+skipped `pip install -r requirements.txt` you will see **one fewer pass and one
+more skip** — the extra skip is the Dijkstra-vs-networkx cross-check. Stated
+relatively because that configuration is not exercised in CI. Anything
+*failing* is a real failure.
 
 ---
 

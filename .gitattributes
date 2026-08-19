@@ -2,3 +2,16 @@
 # Line-ending translation on checkout would change that hash, which defeats the
 # entire point of citing it. Store and emit these bytes exactly as written.
 data/*.json -text
+
+# Same reasoning, wider scope. Every generated artifact below is written with an
+# explicit newline="\n" by its generator (tools/snapshot_weights.py,
+# tools/snapshot_tests.py, tools/run_h5_h6.py). If git translates on checkout,
+# a cloner's bytes differ from what the generator produces: results/h5_h6.json
+# is cited by sha256, and the snapshots would diff whole-file on every
+# regeneration, which destroys the "read the diff as a report" convention.
+#
+# Added 2026-08-10 after git warned "LF will be replaced by CRLF" on all three.
+# This is the frozen-graph hash defect recurring in a new place, so the rule is
+# written against the class rather than the one file that triggered it.
+results/*.json -text
+tests/*.json -text

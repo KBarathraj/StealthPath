@@ -15,3 +15,14 @@ data/*.json -text
 # written against the class rather than the one file that triggered it.
 results/*.json -text
 tests/*.json -text
+
+# Extended 2026-08-10, second recurrence. `results/*.json` matches direct
+# children only, so generated figures under `results/figures/` were uncovered —
+# the SVGs are written with an explicit newline="
+" by the figure scripts and
+# would have been CRLF-translated on checkout, diffing whole-file on every
+# re-render. PNGs are auto-detected binary and were never at risk; they are
+# listed anyway so the intent is explicit rather than relying on detection.
+results/**/*.json -text
+results/**/*.svg  -text
+results/**/*.png  binary

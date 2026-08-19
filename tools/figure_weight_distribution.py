@@ -22,6 +22,11 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
+# Deterministic output. matplotlib stamps <dc:date> into SVG metadata and salts
+# its generated element ids, so two renders of identical data produced different
+# files - which would show as a whole-file diff on every regeneration and makes
+# the figure unusable as a committed artifact. Both are pinned here.
+matplotlib.rcParams["svg.hashsalt"] = "stealthpath"
 import matplotlib.pyplot as plt  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -110,8 +115,17 @@ def main() -> None:
     fig.tight_layout()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "svg"):
-        fig.savefig(f"{OUT}.{ext}", dpi=400, bbox_inches="tight")
+        # Date=None drops the timestamp; without it the artifact differs on every
+        # run. The key is spelled differently per backend.
+        meta = {"Date": None} if ext == "svg" else {"Software": None}
+        fig.savefig(f"{OUT}.{ext}", dpi=400, bbox_inches="tight", metadata=meta)
     plt.close(fig)
+
+    # matplotlib writes platform-native newlines; the hand-authored figure
+    # scripts write LF. Normalise so the committed bytes do not depend on which
+    # machine rendered them.
+    svg = Path(f"{OUT}.svg")
+    svg.write_bytes(svg.read_bytes().replace(b"\r\n", b"\n"))
 
     print(f"wrote {OUT.relative_to(ROOT)}.png / .svg")
     print(f"  modal share {modal_n / n:.1%}  HHI {hhi:.3f}  "

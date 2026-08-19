@@ -20,12 +20,16 @@ from __future__ import annotations
 
 import pytest
 
-from stealthpath.risk import static_cost_fn
+from stealthpath.risk import (
+    REPEAT_MULTIPLIER, history_cost_fn, max_repeat_step, static_cost_fn,
+)
 from stealthpath.risk_properties import (
-    PropertyViolation, check_all, check_p4_subsequence_monotonicity,
+    PropertyViolation, check_all, check_p1_repetition_never_reduces_risk,
+    check_p2_first_repeat_is_strictly_louder, check_p4_subsequence_monotonicity,
     check_p5_target_sensitivity, check_p6_static_reduction,
     check_p7_static_ignores_history, check_p9_strict_positivity,
     check_p12_relabelling_invariance, check_p13_locality, check_p14_determinism,
+    check_p15_bounded_step,
 )
 from stealthpath.synthetic import goad_like, random_ad
 
@@ -39,7 +43,7 @@ def goad():
 
 def test_static_model_satisfies_every_applicable_property(goad):
     ran = check_all(static_cost_fn(), goad, static=static_cost_fn())
-    assert len(ran) == 8
+    assert len(ran) == 9
 
 
 def test_p5_is_not_vacuous():
@@ -175,17 +179,111 @@ def test_p14_catches_nondeterminism(goad):
         check_p14_determinism(jittery, goad)
 
 
+# ----------------------------------------- the history-dependent model (Stage 3)
+
+BOUND, OBSERVED = max_repeat_step()
+
+
+def test_history_model_satisfies_every_applicable_property(goad):
+    """The full gate against the real adaptive model.
+
+    `cost` is the model with its history term disabled (k=1.0) so P6 and P7 can
+    compare it to static; `adaptive` is the live one, which is what P2 and P15
+    are handed.
+    """
+    ran = check_all(history_cost_fn(k=1.0), goad,
+                    static=static_cost_fn(),
+                    adaptive=history_cost_fn(),
+                    max_step=BOUND)
+    assert len(ran) == 11
+
+
+def test_history_model_reduces_exactly_to_static_at_k_one(goad):
+    """P6, stated the way it will actually be used. `weight * 1.0` is exact in
+    IEEE 754, so this is equality rather than tolerance — which is the point of
+    P6, since a tolerance would hide the systematic offset it exists to catch."""
+    check_p6_static_reduction(static_cost_fn(), history_cost_fn(k=1.0), goad)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 7, 42])
+def test_history_properties_hold_across_topologies(seed):
+    """Same reasoning as the static version — one graph passing could be luck."""
+    graph = random_ad(seed=seed)
+    check_all(history_cost_fn(k=1.0), graph,
+              static=static_cost_fn(),
+              adaptive=history_cost_fn(),
+              max_step=BOUND)
+
+
+def test_the_declared_bound_is_not_the_observed_step():
+    """Guards a specific way of overstating the model.
+
+    P15 is checked against the weight *ceiling* so it cannot break when an
+    unrelated weight is sourced upward. That makes the bound (2.0) roughly twice
+    today's actual maximum step (1.3, from `DCSync` at 6.5). Both numbers are
+    real and they mean different things; asserting the gap here stops "holds with
+    headroom" from being read as a measurement.
+    """
+    assert BOUND > OBSERVED
+    assert OBSERVED == pytest.approx(6.5 * (REPEAT_MULTIPLIER - 1.0))
+
+
+# ------------------------------------------ P1, P2, P15 each actually bite
+
+def test_p1_catches_a_model_where_history_makes_things_cheaper(goad):
+    """A "familiarity discount" — the attacker gets quieter the more they do.
+    A cost-minimising planner would pad routes to exploit it."""
+    static = static_cost_fn()
+
+    def discount_for_experience(graph, ei, history):
+        return static(graph, ei, history) / (1.0 + len(history))
+
+    with pytest.raises(PropertyViolation, match="got \\*cheaper\\*"):
+        check_p1_repetition_never_reduces_risk(discount_for_experience, goad)
+
+
+def test_p2_catches_a_model_that_ignores_history(goad):
+    """**The static model is the violator here, and that is the point.** P2 is
+    the property that separates adaptive from static, so a model that passes it
+    while ignoring history would mean the property is measuring nothing."""
+    with pytest.raises(PropertyViolation, match="degenerated into the static"):
+        check_p2_first_repeat_is_strictly_louder(static_cost_fn(), goad)
+
+
+def test_p2_catches_a_penalty_that_decays_after_the_first_repeat(goad):
+    """The other half of P2 — non-decreasing *after* the first repeat. A model
+    that spikes then relaxes would let a planner "wait out" a category, which
+    Summary A's one-bit state cannot represent and must not imply."""
+    static = static_cost_fn()
+
+    def spikes_then_relaxes(graph, ei, history):
+        base = static(graph, ei, history)
+        uses = sum(1 for i in history if graph.edges[i].rel_type
+                   == graph.edges[ei].rel_type)
+        if uses == 0:
+            return base
+        return base * (1.0 + 1.0 / uses)      # 2x, then 1.5x, then 1.33x...
+
+    with pytest.raises(PropertyViolation, match="non-decreasing"):
+        check_p2_first_repeat_is_strictly_louder(spikes_then_relaxes, goad)
+
+
+def test_p15_catches_a_cliff(goad):
+    """The failure P15 exists for, and it is a threat to the project's own
+    conclusion rather than to correctness: a steep enough penalty makes the
+    adaptive planner beat the static one by avoiding a cliff placed by hand, and
+    that looks exactly like a positive result for H3."""
+    with pytest.raises(PropertyViolation, match="exceeding the declared bound"):
+        check_p15_bounded_step(history_cost_fn(k=5.0), goad, max_step=BOUND)
+
+
+def test_p15_accepts_the_declared_multiplier(goad):
+    """The chosen k must actually clear its own bound — otherwise the bound was
+    picked to fit the model rather than the model to fit the bound."""
+    check_p15_bounded_step(history_cost_fn(), goad, max_step=BOUND)
+
+
 # ------------------------------------------------------------------ pending
-
-@pytest.mark.skip(reason="P1/P2 need the history-dependent model — Stage 3")
-def test_p1_p2_repetition_monotonicity():
-    """Repeating a technique must never lower its risk (P1), and repeating the
-    *same* technique must be strictly louder (P2).
-
-    Not written against the static model on purpose: the static model satisfies
-    P1 trivially (equality) and violates P2 by definition, so asserting either
-    here would pin the wrong behaviour and have to be rewritten the moment the
-    real model arrives."""
 
 
 @pytest.mark.skip(reason="P3/P4/P8/P10/P11 need a P_detect route scorer — Stage 3")

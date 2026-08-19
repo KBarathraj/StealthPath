@@ -43,7 +43,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from .ad_schema import TRAVERSABLE_EDGES
+from .ad_schema import TRAVERSABLE_EDGES, category_of
 from .graph import AttackGraph
 
 __all__ = [
@@ -55,6 +55,10 @@ __all__ = [
     "require_sourced",
     "WEIGHT_FLOOR",
     "WEIGHT_CEILING",
+    "REPEAT_MULTIPLIER",
+    "P15_DECLARED_FRACTION",
+    "history_cost_fn",
+    "max_repeat_step",
 ]
 
 WEIGHT_FLOOR = 0.1
@@ -129,6 +133,28 @@ class RiskWeight:
     of what the Shape D edges will need at ~4,500-edge scale.
     """
 
+    tier_conditional_not_applicable: str = ""
+    """Why this SACL-dependent weight has no tier split, when it genuinely has none.
+
+    A weight resting on `NATIVE_SACL` normally *must* declare a
+    `target_is_tier_zero` conditional, because the baseline grants SACLs on
+    tier-zero objects only and one number for both cases is asserting the
+    audited and unaudited object are equally loud.
+
+    A few edges have no non-tier-zero case at all. `DCSync` is the example:
+    replication rights apply only to a naming context, so every target is a
+    domain object and every domain object is tier-zero. The first attempt at
+    this recorded `{"target_is_tier_zero": 6.5}` against a base of 6.5 — a
+    conditional equal to its base, which is a no-op written to satisfy a test.
+    That is the same anti-pattern as editing the test, wearing a different
+    disguise: it encodes a fake number where a fact belongs.
+
+    So the exemption is a **required reason string**, not a flag. An empty
+    string is not an exemption, and
+    `test_a_sacl_only_weight_declares_a_tier_conditional` accepts a real
+    conditional or a stated reason and rejects both-absent.
+    """
+
     @property
     def sourced(self) -> bool:
         return self.source is not None
@@ -144,9 +170,42 @@ def _w(weight: float, rationale: str) -> RiskWeight:
 
 PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # --- no action taken --------------------------------------------------
-    "MemberOf": _w(0.1, "Using a membership you already hold is not an action. "
-                        "The only trace is the authentication that would have "
-                        "happened anyway."),
+    "MemberOf": RiskWeight(
+        weight=0.1,
+        channels=(NATIVE_NONE_FOUND, ENDPOINT_NONE_FOUND),
+        rationale=(
+            "No action is taken. `MemberOf` is a fact about the token the "
+            "attacker already holds, not something they do, so there is no "
+            "operation for a defender to observe.\n"
+            "  IMPACT-VS-LOUDNESS: the temptation is to price group membership "
+            "by what the group can do. That is authority, and it belongs on "
+            "whichever edge exercises it.\n"
+            "  Native half: nothing. The membership is evaluated during "
+            "authentication and appears in 4768/4769/4624 as group SIDs in a "
+            "token - but that authentication would have happened anyway, and "
+            "no event marks the traversal. There is no 'a membership was used' "
+            "record in Windows.\n"
+            "  Endpoint half: nothing. No process, no handle, no artifact.\n"
+            "  FLOOR, NOT ZERO, and the distinction matters: 0.0 would claim "
+            "literal invisibility and let a planner chain unlimited free hops "
+            "through group structure.\n"
+            "  This weight decides a real route and was checked accordingly. "
+            "`SQL_SVC`'s least-risk route runs ...HasSession -> MemberOf -> "
+            "GenericWrite, and below the DCSync threshold the flipped route "
+            "still prefers MemberOf (0.1) over AdminTo. So the floor is doing "
+            "load-bearing work in the headline result. It survives the check: "
+            "there genuinely is no observable action here, and the cheapness "
+            "is the correct answer rather than a convenient one."
+        ),
+        source=(
+            "Negative result, recorded as such. No ATT&CK technique describes "
+            "using a group membership one already holds - T1078 Valid Accounts "
+            "is the closest and concerns the *credential*, not the group. No "
+            "SigmaHQ rule fires on membership use, only on membership *change* "
+            "(4728/4732/4756, which is AddMember/AddSelf, priced separately). "
+            "Both halves searched and empty; that is the finding."
+        ),
+    ),
     "HasSIDHistory": _w(0.3, "Also passive — the SID is already in the token. "
                              "Categorised as credential_access in ad_schema, "
                              "which overstates it; worth revisiting."),
@@ -154,12 +213,84 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
                          "though cross-domain auth stands out more than local."),
 
     # --- looks like normal administration ---------------------------------
-    "AdminTo": _w(3.0, "Admin logon to a host. Generates a logon event, but so "
-                       "does every legitimate admin, every day."),
+    "AdminTo": RiskWeight(
+        weight=2.5,
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
+        rationale=(
+            "Administrative logon to a host.\n"
+            "  IMPACT-VS-LOUDNESS: local admin on a machine is a large "
+            "capability, and 3.0 was partly pricing that. The question is only "
+            "whether the logon stands out.\n"
+            "  Native half: 4624 (logon) and 4672 (special privileges assigned "
+            "to new logon) both fire by default with no SACL. So the event is "
+            "definitely recorded.\n"
+            "  Endpoint half: nothing for the logon itself. Whatever the "
+            "attacker runs afterwards is priced on that edge.\n"
+            "  The reason this lands LOW despite guaranteed recording is base "
+            "rate. 4672 fires for every legitimate administrator on every "
+            "logon, all day, across the estate. No shipped rule alerts on it "
+            "because alerting on it would be unusable. This is the clearest "
+            "case in the table of **visibility without suspicion** - perfect "
+            "recall, no signal - and it must price below anything that trips a "
+            "named rule. Below the ACL writes (4.0), which do.\n"
+            "  Retrievable in an investigation, invisible in a queue. Those are "
+            "different things and the weight models the second."
+        ),
+        source=(
+            "Microsoft Learn, event 4672 'Special privileges assigned to new "
+            "logon' and 4624 'An account was successfully logged on' - both in "
+            "default audit policy, neither SACL-dependent. NO named SigmaHQ "
+            "rule for administrative logon as such: searched, and the absence "
+            "is the point rather than a gap in the search. ATT&CK T1078.002 "
+            "(Valid Accounts: Domain Accounts) describes the technique but "
+            "carries no detection that distinguishes it from ordinary "
+            "administration."
+        ),
+    ),
     "CanRDP": _w(3.5, "Interactive logon. Extremely visible in logs and "
                       "extremely common; visibility without suspicion."),
-    "SQLAdmin": _w(3.5, "Command execution via SQL. Visible where SQL auditing "
-                        "exists, which is inconsistently deployed."),
+    "SQLAdmin": RiskWeight(
+        weight=5.0,
+        technique="T1505.003",
+        channels=(NATIVE_NONE_FOUND, ENDPOINT_RULE),
+        rationale=(
+            "Command execution as the SQL service account, in practice via "
+            "`xp_cmdshell`.\n"
+            "  IMPACT-VS-LOUDNESS: this one moved UP, which is unusual. 3.5 was "
+            "not pricing impact - it was pricing the wrong channel, assuming "
+            "detection depended on SQL Server auditing.\n"
+            "  Native half: nothing. The audit doc already decided SQL Server "
+            "auditing does not clear the bar - it is off by default and is "
+            "per-application configuration, while the baseline covers native "
+            "*AD* auditing plus EDR. Recorded as NONE_FOUND rather than "
+            "silently leaned on.\n"
+            "  Endpoint half: strong, and this is the whole number. Executing "
+            "a command through SQL means `sqlservr.exe` spawns a child - and "
+            "the shipped rule is level **high**, matching cmd.exe, "
+            "powershell.exe, pwsh.exe and eleven others under a sqlservr.exe "
+            "parent.\n"
+            "  Prices ABOVE the ACL-write base (4.0), as the triage predicted. "
+            "Two reasons: the rule is level high where the ACL-write rule is "
+            "not, and **process lineage cannot be renamed away**. The ACL "
+            "writes die to renaming a cmdlet; here the child process is the "
+            "signal and command execution requires one. Same non-evadability "
+            "argument as DCSync's protocol GUIDs, arrived at independently.\n"
+            "  Held below DCSync (6.5) and HasSession (6.0) because it rests "
+            "on one half with nothing on the other."
+        ),
+        source=(
+            "SigmaHQ rules/windows/process_creation/"
+            "proc_creation_win_mssql_susp_child_process.yml - 'Suspicious "
+            "Child Process Of SQL Server', id "
+            "869b9ca7-9ea2-4a5a-8325-e80e62f75445, status test, **level "
+            "high**. ParentImage endswith '\\sqlservr.exe'; Image endswith any "
+            "of bash.exe, bitsadmin.exe, cmd.exe, netstat.exe, nltest.exe, "
+            "ping.exe, powershell.exe, pwsh.exe, regsvr32.exe, rundll32.exe, "
+            "sh.exe, systeminfo.exe, tasklist.exe, wsl.exe. Carries a DATEV "
+            "filter. Tags attack.t1505.003, attack.t1190. Read from the rule "
+            "body, not a summary."
+        ),
+    ),
     "CanPSRemote": _w(4.0, "WinRM. Less common in ordinary user activity than "
                            "RDP, so it stands out more against a baseline."),
     "ExecuteDCOM": _w(5.5, "Rare in normal operations and specifically hunted "
@@ -169,9 +300,78 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     # These write to AD, so they land in directory-service auditing *if* it is
     # switched on. That conditional is doing a lot of work and is exactly the
     # kind of assumption the sourcing pass needs to pin down.
-    "AddMember": _w(4.0, "Group modification. Well-known event IDs and a common "
-                         "alert, especially on privileged groups."),
-    "AddSelf": _w(4.0, "Same modification, same events, attacker as the target."),
+    "AddMember": RiskWeight(
+        weight=4.5,
+        technique="T1098",
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
+        rationale=(
+            "Adding a principal to a group.\n"
+            "  IMPACT-VS-LOUDNESS: adding yourself to Domain Admins is "
+            "enormous impact. The events fire identically for adding someone "
+            "to a distribution group.\n"
+            "  Native half: 4728 (global), 4732 (local), 4756 (universal) all "
+            "fire by default, no SACL, and there is a **stable** shipped rule "
+            "on 4728.\n"
+            "  Endpoint half: nothing. The change can be made over LDAP or "
+            "SAMR from a host nobody is watching.\n"
+            "  The triage predicted 'likely the loudest of these eight after "
+            "DCSync'. **That prediction is wrong, and the rule body is why.** "
+            "The shipped rule is level **low** with false positives 'Unknown', "
+            "and it matches *any* addition to *any* security-enabled global "
+            "group - not privileged ones. It is an audit-trail rule, not an "
+            "alert. Helpdesk group changes fire it all day.\n"
+            "  So: reliably recorded, named and stable, but low-severity and "
+            "high-volume. 4.5 - above ForceChangePassword (4.0), which has no "
+            "named rule at all, and above the ACL writes (4.0) whose native "
+            "half needs a SACL this one does not. Below the edges carrying a "
+            "high-severity or technique-specific rule.\n"
+            "  A privileged-group-specific conditional is the obvious "
+            "refinement and is NOT added here: it needs target-kind-aware "
+            "costing, which the audit doc already lists as blocked on the "
+            "schema rather than the weights."
+        ),
+        source=(
+            "SigmaHQ rules/windows/builtin/security/account_management/"
+            "win_security_member_added_security_enabled_global_group.yml - 'A "
+            "Member Was Added to a Security-Enabled Global Group', id "
+            "c43c26be-2e87-46c7-8661-284588c5a53e, **status stable, level "
+            "low**, falsepositives Unknown. Detection: EventID 4728 or 632, "
+            "condition `selection` with no filtering. Tags "
+            "attack.privilege-escalation, attack.persistence, attack.t1098. "
+            "A more targeted sibling exists for the local-administrators case "
+            "(win_security_user_added_to_local_administrators.yml, keyed on "
+            "S-1-5-32-544); not cited as primary because BloodHound's "
+            "`AddMember` is domain group membership."
+        ),
+    ),
+    "AddSelf": RiskWeight(
+        weight=4.5,
+        technique="T1098",
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
+        rationale=(
+            "The same modification with the attacker as the member added.\n"
+            "  The triage asked whether anything distinguishes this from "
+            "AddMember in the log. **Answer: nothing shipped does.** 4728 "
+            "records Subject (who performed it) and Member (who was added) as "
+            "separate fields, so the self-addition case *is* expressible - "
+            "Subject equals Member is a genuinely suspicious pattern, since "
+            "administrators rarely add themselves. But the shipped rule "
+            "conditions on EventID alone and does not compare the two fields, "
+            "and no other rule was found that does.\n"
+            "  Pricing what exists rather than what could exist: identical to "
+            "AddMember at 4.5. Recorded as an asymmetry between what the log "
+            "*contains* and what any rule *reads* - a detection-engineering "
+            "gap, not a modelling one, and a natural instance of the "
+            "evasion-difficulty axis in reverse: the signal is present and "
+            "simply unused."
+        ),
+        source=(
+            "Same rule and citation as `AddMember` above - EventID 4728, "
+            "condition `selection`, no Subject/Member comparison. The absence "
+            "of a self-addition rule was searched for specifically and none "
+            "was found; recorded as a negative result."
+        ),
+    ),
     # --- Shape D: ACL writes -----------------------------------------------
     # SOURCED, and re-derived once. The first derivation used only the native-AD
     # half of the baseline: 5136 / 4670 both need a SACL, the baseline grants
@@ -326,15 +526,93 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "ReadLAPSPassword": _w(2.5, "A directory attribute read. Quiet unless LAPS "
                                 "read auditing is deliberately configured, "
                                 "which it often isn't."),
+    # PENDING INVERSION - the invariant skip below is deliberate, not an oversight.
+    # This is the second composite in COMPOSITE_RIGHTS (GetChanges +
+    # GetChangesInFilteredSet), and both components are sourced at 6.5 while this
+    # sits at an unsourced 2.5 - i.e. the halves are already louder than the
+    # whole. test_no_composite_is_quieter_than_a_component_it_subsumes does not
+    # fire, because it only checks *sourced* composites: comparing a derived
+    # number against a guess is the anchoring trap the method forbids.
+    # Consequence to expect: sourcing this below 6.5 will fail that test, and
+    # should. The same 4662 rule fires on GetChangesInFilteredSet's GUID, so the
+    # honest answer is very likely 6.5.
     "SyncLAPSPassword": _w(2.5, "Same read, replication path."),
     "ReadGMSAPassword": _w(2.5, "Same shape as the LAPS read."),
     "DumpSMSAPassword": _w(4.0, "Requires host access first, so it rides on "
                                 "whatever noise got you there."),
-    "ForceChangePassword": _w(5.0, "A password reset the user did not request. "
-                                   "Distinctive event, and users notice."),
-    "HasSession": _w(6.0, "Credential theft from a live session means touching "
-                          "LSASS. This is the single most heavily instrumented "
-                          "action on a modern endpoint."),
+    "ForceChangePassword": RiskWeight(
+        weight=4.0,
+        technique="T1098",
+        channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
+        rationale=(
+            "Resetting another principal's password without knowing the old "
+            "one.\n"
+            "  IMPACT-VS-LOUDNESS, and the leak here is subtle. 5.0 was partly "
+            "priced on 'users notice' - the victim is locked out and "
+            "complains. That is a real consequence and it is **not "
+            "telemetry**. It is the named non-telemetry limitation from the "
+            "audit doc, and folding it into a detection weight is exactly the "
+            "error the method exists to catch. Removed; the number drops.\n"
+            "  Native half: 4724 'An attempt was made to reset an account's "
+            "password' fires by default, no SACL. Recorded reliably.\n"
+            "  Endpoint half: nothing. The reset goes over SAMR or LDAP and "
+            "needs no process on any monitored host.\n"
+            "  No named SigmaHQ rule found for 4724 - see the source note, "
+            "which matters. So: default-channel recording, no shipped alert, "
+            "but a genuinely uncommon operation. That puts it above AdminTo "
+            "(2.5), which is recorded-but-ubiquitous, and at the ACL-write "
+            "level (4.0) rather than above it."
+        ),
+        source=(
+            "Microsoft Learn, event 4724 'An attempt was made to reset an "
+            "account's password' - default audit policy, not SACL-dependent. "
+            "ATT&CK T1098 Account Manipulation.\n"
+            "NO named SigmaHQ rule cited, deliberately. A search returned a "
+            "'Tier-0 Password Reset (4724)' rule with no SigmaHQ path, an id "
+            "that does not match the repository's format, and a future "
+            "modification date. It was NOT cited and should not be - this pass "
+            "had already produced two bad citations (a 404'd filename and an "
+            "AccessMask term absent from the rule body), and an unverifiable "
+            "third is how a confidently wrong answer enters. If a real 4724 "
+            "rule exists, finding it would raise this weight."
+        ),
+    ),
+    "HasSession": RiskWeight(
+        weight=6.0,
+        technique="T1003.001",
+        channels=(NATIVE_NONE_FOUND, ENDPOINT_RULE),
+        rationale=(
+            "Harvesting the credentials of a user with a live session on a "
+            "host the attacker controls, which means reading LSASS.\n"
+            "  IMPACT-VS-LOUDNESS: held at 6.0 across the revised baseline "
+            "already. The triage said it needed a named rule to finish, not a "
+            "re-derivation. It now has one and the number is unchanged - worth "
+            "recording, because a sourcing pass that only ever moves numbers "
+            "would be suspicious in its own way.\n"
+            "  Native half: nothing. LSASS access is not an AD operation and "
+            "produces no directory event.\n"
+            "  Endpoint half: the most heavily instrumented behaviour on a "
+            "modern endpoint. The shipped rule keys on ProcessAccess to "
+            "lsass.exe with specific GrantedAccess masks and on CallTrace "
+            "entries through dbgcore.dll / dbghelp.dll, i.e. "
+            "MiniDumpWriteDump.\n"
+            "  Highest of the seven, and second only to DCSync overall. Not "
+            "raised further because the GrantedAccess/CallTrace signature is "
+            "genuinely evadable - direct syscalls or handle duplication move "
+            "an attacker off the matched masks - which is a real difference "
+            "from DCSync's protocol constants."
+        ),
+        source=(
+            "SigmaHQ rules/windows/process_access/"
+            "proc_access_win_lsass_memdump.yml - 'Potential Credential "
+            "Dumping Activity Via LSASS'. TargetImage endswith '\\lsass.exe'; "
+            "GrantedAccess in 0x1038, 0x1438, 0x143a, 0x1fffff; CallTrace "
+            "contains dbgcore.dll / dbghelp.dll among others. Tags "
+            "attack.credential-access, attack.t1003.001. Authors Samir "
+            "Bousseaden and Michael Haag. Sysmon Event 10 (ProcessAccess) is "
+            "the log source and is EDR/Sysmon-class, in baseline, no SACL."
+        ),
+    ),
 
     # --- delegation --------------------------------------------------------
     # SOURCED. All three share one detection — 4769 with a non-blank Transited
@@ -520,12 +798,164 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
 
     # --- replication -------------------------------------------------------
     # The loudest category. If a shop has one AD detection, it is this one.
-    "GetChanges": _w(8.0, "Replication right. On its own it is a precondition, "
-                          "but requesting it is already anomalous."),
-    "GetChangesAll": _w(8.0, "Second half of the same precondition."),
-    "GetChangesInFilteredSet": _w(8.0, "Narrower variant, same signal."),
-    "DCSync": _w(9.0, "Replication from a non-DC. The canonical AD detection; "
-                      "assume any shop with monitoring catches this."),
+    # The three components below are priced as ONE UNIT with the composite
+    # above. They sat at 8.0 while `DCSync` was 9.0 and stayed there when it
+    # was sourced to 6.5, leaving the halves louder than the whole - which is
+    # incoherent, because exercising the composite means exercising them.
+    #
+    # Why they land EQUAL to the composite rather than below it: the Sigma
+    # rule's selection matches `Properties|contains` **any one** of the four
+    # replication GUIDs. A request carrying only DS-Replication-Get-Changes
+    # produces the same 4662 and trips the same rule as a full DCSync. The
+    # detection keys on the replication request, not on how many rights the
+    # principal holds, so there is no signal difference to price. Equal is the
+    # derived answer, not a rounding convenience.
+    #
+    # All three are in PARTIAL_RIGHT_EDGES and non-traversable, so no route
+    # reads these numbers. That is exactly how the inversion survived - see
+    # `docs/findings.md` 2026-08-09.
+    "GetChanges": RiskWeight(
+        weight=6.5,
+        technique="T1003.006",
+        channels=(NATIVE_SACL, ENDPOINT_NONE_FOUND),
+        tier_conditional_not_applicable=(
+            "Replication rights apply only to a naming context, so the target "
+            "is always a domain object and always tier-zero."
+        ),
+        rationale=(
+            "Component of DCSync (with GetChangesAll) and of SyncLAPSPassword "
+            "(with GetChangesInFilteredSet). Non-traversable.\n"
+            "  IMPACT-VS-LOUDNESS: 8.0 priced it as 'requesting replication is "
+            "already anomalous', which is a statement about how suspicious the "
+            "request looks rather than about what records it. What records it "
+            "is one 4662, the same one the composite produces.\n"
+            "  Equal to the composite by derivation - the rule fires on this "
+            "GUID alone. See the block comment above."
+        ),
+        source="Same rule and selection as `DCSync` above; this GUID is "
+               "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2 "
+               "(DS-Replication-Get-Changes), listed in the rule's own "
+               "selection as an independent match.",
+    ),
+    "GetChangesAll": RiskWeight(
+        weight=6.5,
+        technique="T1003.006",
+        channels=(NATIVE_SACL, ENDPOINT_NONE_FOUND),
+        tier_conditional_not_applicable=(
+            "Replication rights apply only to a naming context, so the target "
+            "is always a domain object and always tier-zero."
+        ),
+        rationale="Second half of the DCSync pair. Same 4662, same rule, same "
+                  "number as its sibling and its composite.",
+        source="Same rule and selection as `DCSync` above; this GUID is "
+               "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 "
+               "(DS-Replication-Get-Changes-All).",
+    ),
+    "GetChangesInFilteredSet": RiskWeight(
+        weight=6.5,
+        technique="T1003.006",
+        channels=(NATIVE_SACL, ENDPOINT_NONE_FOUND),
+        tier_conditional_not_applicable=(
+            "Replication rights apply only to a naming context, so the target "
+            "is always a domain object and always tier-zero."
+        ),
+        rationale=(
+            "Pairs with GetChanges to make SyncLAPSPassword. Same 4662 and the "
+            "same rule.\n"
+            "  NOTE for the next pass: `SyncLAPSPassword` is the composite of "
+            "this and GetChanges and currently sits UNSOURCED at 2.5, far below "
+            "its own components. The composite invariant skips it only because "
+            "it is unsourced; sourcing it at anything below 6.5 will fail "
+            "`test_no_composite_is_quieter_than_a_component_it_subsumes`, and "
+            "should - the same rule fires."
+        ),
+        source="Same rule and selection as `DCSync` above; this GUID is "
+               "89e95b76-444d-4c62-991a-0facbeda640c "
+               "(DS-Replication-Get-Changes-In-Filtered-Set).",
+    ),
+    "DCSync": RiskWeight(
+        weight=6.5,
+        technique="T1003.006",
+        channels=(NATIVE_SACL, ENDPOINT_NONE_FOUND),
+        tier_conditional_not_applicable=(
+            "Replication rights apply only to a naming context, so every "
+            "DCSync target is a domain object and every domain object is "
+            "tier-zero. There is no non-tier-zero case to split."
+        ),
+        rationale=(
+            "One action, not a chain: request DsGetNCChanges over DRSUAPI. The "
+            "attacker already holds both replication rights or the composite "
+            "edge would not exist.\n"
+            "  IMPACT-VS-LOUDNESS: this is where that confusion hides best. "
+            "DCSync is the highest-impact edge in the schema - every hash in "
+            "the domain, krbtgt included - and 9.0 was pricing exactly that. "
+            "Near-ceiling on a 10-point scale is a statement that the action is "
+            "almost maximally *noticeable*, which is a different claim and one "
+            "the evidence does not support. The narrow question is whether the "
+            "replication request is recorded.\n"
+            "  Native half, and it is the whole of the number: 4662 carrying "
+            "the replication extended-right GUIDs. SACL-dependent - it needs a "
+            "SACL on the domain root plus the Directory Service Access audit "
+            "subcategory. **The baseline grants SACLs on tier-zero objects, and "
+            "the domain root is tier-zero, so unlike the Shape D edges this "
+            "channel is genuinely present.** The audit doc asked for this to be "
+            "confirmed rather than assumed; it is confirmed.\n"
+            "  Endpoint half: nothing found. The call is remote RPC against the "
+            "DC. `secretsdump.py` from Linux leaves no process artifact on the "
+            "DC at all, and Mimikatz leaves one on the attacker's host, which is "
+            "not the DC and is often unmonitored.\n"
+            "  So DCSync is the structural mirror of Shape D. Those edges rest "
+            "entirely on the endpoint half; this one rests entirely on the "
+            "native half. Neither has both.\n"
+            "  Placement at 6.5: a clear step above AddAllowedToAct (5.0), which "
+            "has the same channel shape - SACL plus nothing on the endpoint - "
+            "but no named rule. DCSync adds two real things: a shipped rule "
+            "written for this exact technique, and a SACL that is present by "
+            "construction rather than by luck of which object was targeted. "
+            "Discounted well below the ceiling for three reasons: the rule is "
+            "`test` status, its documented false-positive rate is *medium* "
+            "rather than low, and it filters principals ending in `$` - so "
+            "DCSync from a computer account is not matched by it. That last one "
+            "is cheap wherever a route already yields a machine account (RBCD, "
+            "MachineAccountQuota).\n"
+            "  What it is NOT evadable by: renaming tooling. The replication "
+            "GUIDs are protocol constants - you cannot request replication "
+            "without asking for them. That is the opposite of the Shape D case, "
+            "where renaming a cmdlet defeats the rule, and it is a first "
+            "concrete instance of the evasion-difficulty axis logged as future "
+            "work in `docs/abstract.md`.\n"
+            "  No tier split: see `tier_conditional_not_applicable`. Every "
+            "target is a domain object, so the base *is* the tier-zero case."
+        ),
+        source=(
+            "SigmaHQ rules/windows/builtin/security/"
+            "win_security_ad_replication_non_machine_account.yml - 'Active "
+            "Directory Replication from Non Machine Account - DcSync "
+            "Indicator', id 17d619c1-e020-4347-957e-1d1207455c93, author "
+            "Roberto Rodriguez (@Cyb3rWard0g). Status: test. Documented "
+            "false-positive rate: medium. Requires a SACL on the domain root "
+            "and the Directory Service Access audit subcategory. ATT&CK "
+            "T1003.006 (OS Credential Dumping: DCSync), from the rule's tags.\n"
+            "SELECTION, read from the rule body rather than a summary - "
+            "EventID 4662 and Properties|contains any of FOUR GUIDs, all now "
+            "resolved: 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2 "
+            "DS-Replication-Get-Changes-All; 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2 "
+            "DS-Replication-Get-Changes; 9923a32a-3607-11d2-b9be-0000f87a36b2 "
+            "DS-Replication-Synchronize; 89e95b76-444d-4c62-991a-0facbeda640c "
+            "DS-Replication-Get-Changes-In-Filtered-Set.\n"
+            "FILTERS: SubjectUserName endswith '$'; SubjectDomainName 'Window "
+            "Manager'; SubjectUserName startswith 'NT AUT' or 'MSOL_'. "
+            "Condition: selection and not 1 of filter_main_* and not 1 of "
+            "filter_optional_*.\n"
+            "The selection carries NO AccessMask term. A secondary summary "
+            "claimed 0x100 (Control Access); the rule body does not contain it. "
+            "Recorded because it would have been an invented detail.\n"
+            "FILENAME TRAP: an earlier search returned "
+            "'win_security_dcsync.yml' for this rule. That file does not "
+            "exist; the path above is the real one. Recorded so the wrong "
+            "citation is not re-derived."
+        ),
+    ),
 }
 
 
@@ -557,6 +987,118 @@ def static_cost_fn(table: dict[str, RiskWeight] = PROVISIONAL_WEIGHTS
     def cost(graph: AttackGraph, edge_index: int,
              path_so_far: Sequence[int]) -> float:
         return weight_of(graph.edges[edge_index].rel_type, table)
+
+    return cost
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: the history-dependent model
+# ---------------------------------------------------------------------------
+
+REPEAT_MULTIPLIER = 1.2
+"""`k` in the proportional repeat step. **A declared parameter, not a derived one.**
+
+Nothing in the telemetry baseline fixes this value, and saying so plainly is part
+of the model rather than a caveat on it. The sourcing pass priced *first*
+occurrences — it found named rules, event IDs and severities for an action
+happening once. No evidence in it speaks to what a defender does on the second
+sighting, because the baseline excludes the correlation and UEBA capability that
+would notice.
+
+**So the defence of `k` is the sweep, not the point value.** This is written
+before any result exists, deliberately, so it cannot read later as a response to
+an inconvenient number: conclusions are to be reported as the *range of `k` over
+which they hold*, plus the value at which any conclusion flips — exactly the
+treatment `DCSync` got in the H4 threshold analysis, using the same machinery.
+P16 (monotone in the penalty parameter, deferred) is the property that covers
+this axis.
+
+1.2 is the working default, chosen to satisfy P15 against the weight ceiling
+with margin. See `max_repeat_step`.
+"""
+
+P15_DECLARED_FRACTION = 0.25
+"""P15's "declared fraction of the total range" — the bound a single repetition
+may not exceed.
+
+Stated against `WEIGHT_CEILING`, not against the largest weight actually in the
+table. That decoupling is deliberate: bounding against the observed maximum would
+make P15 fail later when some unrelated weight is sourced upward, which is the
+hidden-dependency pattern that caused documented drift earlier in this project.
+
+Read `max_repeat_step` for the two numbers that matter and do not confuse them —
+the bound is 2.0 (25.3% of range, and only reachable if a weight reaches the
+ceiling of 10.0), while today's *actual* maximum step is 1.3, about 13% of range,
+because the highest sourced weight is `DCSync` at 6.5. "Holds with headroom" is a
+statement about the bound, not a measurement of the model.
+"""
+
+
+def max_repeat_step(k: float = REPEAT_MULTIPLIER,
+                    table: dict[str, RiskWeight] = PROVISIONAL_WEIGHTS
+                    ) -> tuple[float, float]:
+    """`(bound_at_ceiling, observed_max)` for the repeat step, in weight units.
+
+    Two numbers on purpose. The first is what P15 is checked against and is
+    stable under any weight change; the second is what the model does today.
+    Reporting only the first overstates the step; only the second makes P15
+    brittle.
+    """
+    heaviest = max((w.weight for w in table.values()), default=WEIGHT_FLOOR)
+    return WEIGHT_CEILING * (k - 1.0), heaviest * (k - 1.0)
+
+
+def history_cost_fn(table: dict[str, RiskWeight] = PROVISIONAL_WEIGHTS,
+                    k: float = REPEAT_MULTIPLIER
+                    ) -> Callable[[AttackGraph, int, Sequence[int]], float]:
+    """Cost function in the planners' shared signature, reading `path_so_far`.
+
+    Summary A: the attacker's history is summarised as **the set of technique
+    categories used so far** — nine categories, one bit each. An action costs its
+    static weight the first time its category appears on the route, and
+    `weight * k` on every appearance after that.
+
+    **Proportional, not uniform**, and the reason is a result rather than a
+    preference. A uniform additive step would charge the same increment for
+    repeating `MemberOf` as for repeating `DCSync` — but `MemberOf` is sourced at
+    the floor with *both* baseline halves recorded as `NONE_FOUND`, meaning the
+    sourcing pass established there is no detection at all. A fixed step would
+    manufacture loudness there, silently overturning a sourced negative result on
+    the exact hop that decides the `SQL_SVC` route. Scaling by the edge's own
+    weight leaves it at the floor.
+
+    The second reason is the baseline. A uniform step models a defender who
+    notices "this category has appeared before" independently of severity;
+    nothing in a default-logging posture does that, because what reaches a human
+    is gated by rule severity. Proportional models repetition as *amplifying
+    existing signal* rather than creating new signal, which is what a severity-
+    gated queue actually does.
+
+    **Non-decreasing after the first repeat, by construction.** The state carries
+    one bit per category, so the second and third uses are indistinguishable and
+    must cost the same. That is P2 in its restated form, and it is a consequence
+    of Summary A rather than a modelling choice made here.
+
+    `k=1.0` disables the history term exactly — `weight * 1.0` is exact in IEEE
+    754 — which is what P6 checks against `static_cost_fn`.
+
+    Known limitation, demonstrated rather than hypothetical: the nine categories
+    do not all group edges that share a detection rule. `acl_abuse` holds both
+    the Shape D writes (SACL + a script-block rule) and `AddMember`/`AddSelf`
+    (default channel, no endpoint rule) — different events, different baseline
+    halves, different severities, no shared rule. Repeating across that boundary
+    asserts a transfer the baseline does not support. The proportional form
+    bounds how far that error travels, since the step is computed from the edge
+    actually being taken. See `docs/stage3_risk_model_properties.md`.
+    """
+    def cost(graph: AttackGraph, edge_index: int,
+             path_so_far: Sequence[int]) -> float:
+        edge = graph.edges[edge_index]
+        base = weight_of(edge.rel_type, table)
+        # category_of raises on unknown types (build rule 4). Left to propagate:
+        # an uncategorised edge must not quietly take the first-use branch.
+        seen = {category_of(graph.edges[i].rel_type) for i in path_so_far}
+        return base * k if category_of(edge.rel_type) in seen else base
 
     return cost
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from stealthpath.ad_schema import DEFAULT_TRAVERSAL_SET
+from stealthpath.ad_schema import COMPOSITE_RIGHTS, DEFAULT_TRAVERSAL_SET
 from stealthpath.risk import (
     ENDPOINT_HALF, NATIVE_HALF, NATIVE_SACL, PROVISIONAL_WEIGHTS,
     WEIGHT_CEILING, WEIGHT_FLOOR, unsourced,
@@ -65,12 +65,28 @@ def test_sourced_weight_has_both_a_rationale_and_a_citation():
 def test_a_sacl_only_weight_declares_a_tier_conditional():
     """If the only native channel needs a SACL, then on a non-tier-zero target
     that channel is silent — so the weight *must* split by tier, or it is
-    asserting the same loudness for an audited and an unaudited object."""
+    asserting the same loudness for an audited and an unaudited object.
+
+    A few edges genuinely have no non-tier-zero case: the replication rights
+    only apply to a naming context, so every target is a domain object. Those
+    declare `tier_conditional_not_applicable` with a **reason**, and the reason
+    is required because the first attempt at this wrote
+    `{"target_is_tier_zero": 6.5}` against a base of 6.5 — a conditional equal
+    to its base, which satisfies the letter of the check while recording a fake
+    number. An exemption that has to be justified in prose cannot be produced
+    by accident; one that is a bare `True` can.
+    """
     for rel, w in SOURCED.items():
-        if NATIVE_SACL in w.channels:
-            assert w.conditional and "target_is_tier_zero" in w.conditional, (
-                f"{rel} rests on SACL-dependent auditing but has no tier "
-                f"conditional")
+        if NATIVE_SACL not in w.channels:
+            continue
+        has_split = bool(w.conditional and "target_is_tier_zero" in w.conditional)
+        exempt = w.tier_conditional_not_applicable.strip()
+        assert has_split or exempt, (
+            f"{rel} rests on SACL-dependent auditing but neither splits by tier "
+            f"nor says why it cannot")
+        assert not (has_split and exempt), (
+            f"{rel} declares both a tier conditional and an exemption from "
+            f"needing one — decide which is true")
 
 
 def test_tier_zero_is_never_quieter_than_the_base():
@@ -96,6 +112,33 @@ def test_no_weight_is_free_and_none_exceeds_the_scale():
         values = [w.weight, *(w.conditional or {}).values()]
         for v in values:
             assert WEIGHT_FLOOR <= v <= WEIGHT_CEILING, f"{rel}: {v}"
+
+
+def test_no_composite_is_quieter_than_a_component_it_subsumes():
+    """Exercising a composite means exercising its components, so the composite
+    cannot emit less than they do.
+
+    Written after the inversion it would have caught: `DCSync` was sourced down
+    to 6.5 while `GetChanges` and `GetChangesAll` stayed at 8.0, leaving the
+    halves louder than the whole. It survived because all three components are
+    non-traversable — no route reads their weights, so no `compare` run could
+    ever surface it. This is the only place it *can* be caught.
+
+    Sourced composites only, for the standing reason: comparing a derived
+    number against an unsourced guess is the anchoring trap. `SyncLAPSPassword`
+    is skipped today and will be checked the moment it is sourced — at which
+    point it must land at or above its components, not at its current 2.5.
+    """
+    for composite, components in COMPOSITE_RIGHTS.items():
+        w = PROVISIONAL_WEIGHTS[composite]
+        if not w.sourced:
+            continue
+        for component in components:
+            c = PROVISIONAL_WEIGHTS[component]
+            assert w.weight >= c.weight, (
+                f"{composite} ({w.weight}) is quieter than {component} "
+                f"({c.weight}), which it subsumes — holding both rights cannot "
+                f"emit less than holding one")
 
 
 def test_every_walkable_edge_is_priced():

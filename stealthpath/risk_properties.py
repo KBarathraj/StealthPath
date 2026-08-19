@@ -41,6 +41,9 @@ __all__ = [
     "PropertyViolation",
     "CostFn",
     "route_cost",
+    "check_p1_repetition_never_reduces_risk",
+    "check_p2_first_repeat_is_strictly_louder",
+    "check_p15_bounded_step",
     "check_p4_subsequence_monotonicity",
     "check_p5_target_sensitivity",
     "check_p6_static_reduction",
@@ -376,15 +379,152 @@ def check_p14_determinism(cost: CostFn, graph: AttackGraph, repeats: int = 5) ->
                 )
 
 
+# ------------------------------------------------------------ P1, P2, P15
+#
+# The three that needed the history-dependent model to exist. They are written
+# here in the same form as the other six — a function over a cost function —
+# rather than as tests, so the model can be probed from a scratch script.
+
+def _extensions(graph: AttackGraph, edge_index: int
+                ) -> list[tuple[tuple[int, ...], int]]:
+    """`(history, one_more_action)` pairs for probing single-step changes.
+
+    P1 and P15 both ask what happens when *one* action is appended, so they
+    share the probe rather than each inventing histories.
+    """
+    walkable = _walkable(graph)
+    other = next((i for i in walkable if i != edge_index), edge_index)
+    return [
+        ((), edge_index),
+        ((), other),
+        ((other,), edge_index),
+        ((edge_index,), edge_index),
+        ((edge_index,), other),
+        ((other, edge_index), edge_index),
+    ]
+
+
+def check_p1_repetition_never_reduces_risk(cost: CostFn, graph: AttackGraph) -> None:
+    """**P1 — doing more can never make the next action cheaper.**
+
+    `V(e, h + [a]) >= V(e, h)` for any prior action `a`.
+
+    Without it the model can be gamed by padding: a planner would insert extra
+    actions to *reduce* the cost of the one it actually wants, which inverts the
+    objective the whole project is measuring. Note this is the property a
+    normalisation bug produces most easily — dividing by route length looks
+    reasonable and violates this immediately.
+    """
+    for ei in _walkable(graph):
+        for history, extra in _extensions(graph, ei):
+            before = cost(graph, ei, history)
+            after = cost(graph, ei, tuple(history) + (extra,))
+            if after < before:
+                raise PropertyViolation(
+                    f"P1: edge {ei} ({graph.edges[ei].rel_type}) got *cheaper* "
+                    f"when action {extra} was appended to history {history}: "
+                    f"{before!r} -> {after!r}. A model that rewards padding "
+                    f"inverts the objective."
+                )
+
+
+def check_p2_first_repeat_is_strictly_louder(cost: CostFn,
+                                             graph: AttackGraph) -> int:
+    """**P2 — repeating a technique category for the first time is strictly louder.**
+
+    `V(e, h + [e]) > V(e, h)` when `h` holds nothing of `e`'s category, and
+    non-decreasing thereafter.
+
+    *Restated form.* The original demanded a strict increase on **every** repeat,
+    which is unsatisfiable under Summary A: the state carries one bit per
+    category, so the second and third uses are indistinguishable and must score
+    equal. What the property is for survives — the adaptive model must not
+    silently degenerate into the static one.
+
+    **This is the one property a static model must fail.** Do not run it against
+    the static regime expecting a pass; `check_all` only applies it to a model
+    passed as `adaptive`.
+
+    Returns the number of edges compared, and raises if that is zero — a probe
+    graph with nothing walkable would otherwise pass by doing nothing.
+    """
+    compared = 0
+    for ei in _walkable(graph):
+        first = cost(graph, ei, ())
+        second = cost(graph, ei, (ei,))
+        third = cost(graph, ei, (ei, ei))
+        compared += 1
+        if not second > first:
+            raise PropertyViolation(
+                f"P2: edge {ei} ({graph.edges[ei].rel_type}) cost {second!r} on "
+                f"the first repeat of its category against {first!r} fresh — not "
+                f"strictly louder. The adaptive model has degenerated into the "
+                f"static one for this edge."
+            )
+        if third < second:
+            raise PropertyViolation(
+                f"P2: edge {ei} ({graph.edges[ei].rel_type}) fell from {second!r} "
+                f"to {third!r} on a later repeat; the term must be "
+                f"non-decreasing after the first."
+            )
+    if compared == 0:
+        raise PropertyViolation(
+            "P2 made no comparisons — no walkable edges in the probe graph, so "
+            "this check is passing by doing nothing. Fix the probe."
+        )
+    return compared
+
+
+def check_p15_bounded_step(cost: CostFn, graph: AttackGraph, *,
+                           max_step: float) -> None:
+    """**P15 — no single repetition may move the score by more than `max_step`.**
+
+    *Renamed from "gradient, not cliff".* Under Summary A there is no gradient
+    available — one bit per category can only produce a step — so the old name
+    described a shape the model cannot have. What survives is that the step be
+    bounded.
+
+    The reason is a threat to the project's own conclusion. If the history
+    penalty is tuned steeply enough, the adaptive planner beats the static one
+    trivially by avoiding a cliff that was placed there by hand. That would look
+    exactly like a positive result for H3 and would be an artifact of tuning.
+
+    `max_step` is supplied by the caller rather than read from the risk model, so
+    this module stays a spec over cost functions and does not import the thing it
+    checks. See `risk.max_repeat_step` for how it is derived, and note it is a
+    bound against the weight ceiling, not a measurement of today's model.
+    """
+    for ei in _walkable(graph):
+        for history, extra in _extensions(graph, ei):
+            before = cost(graph, ei, history)
+            after = cost(graph, ei, tuple(history) + (extra,))
+            if abs(after - before) > max_step:
+                raise PropertyViolation(
+                    f"P15: edge {ei} ({graph.edges[ei].rel_type}) moved "
+                    f"{before!r} -> {after!r} on one appended action "
+                    f"(|Δ| = {abs(after - before)!r}), exceeding the declared "
+                    f"bound of {max_step!r}. A step this size lets the adaptive "
+                    f"planner win by avoiding a hand-placed cliff."
+                )
+
+
 # -------------------------------------------------------------------- runner
 
 def check_all(cost: CostFn, graph: AttackGraph, *,
-              static: CostFn | None = None) -> list[str]:
+              static: CostFn | None = None,
+              adaptive: CostFn | None = None,
+              max_step: float | None = None) -> list[str]:
     """Run every property that applies to a single cost function.
 
-    Returns the names of the properties that passed. P6 needs two models and is
-    only run when `static` is supplied — pass the static cost function and make
-    `cost` the adaptive one with its history term disabled.
+    Returns the names of the properties that passed. Three of them need more
+    than one model or an extra number, so they are opt-in:
+
+    - `static` — enables P6 and P7. Pass the static cost function and make
+      `cost` the adaptive one *with its history term disabled*.
+    - `adaptive` — enables P2, which a static model must fail by definition. Pass
+      the genuinely history-dependent model here, not the disabled one.
+    - `max_step` — enables P15, which needs a declared bound. See
+      `risk.max_repeat_step`.
 
     Raises on the first violation rather than collecting them: a model that
     fails one of these is not in a state where the remaining answers mean
@@ -394,6 +534,7 @@ def check_all(cost: CostFn, graph: AttackGraph, *,
     check_p5_target_sensitivity(cost)
     ran.append("P5 target sensitivity")
     for name, check in (
+        ("P1 repetition never reduces risk", check_p1_repetition_never_reduces_risk),
         ("P4 subsequence monotonicity", check_p4_subsequence_monotonicity),
         ("P9 strict positivity", check_p9_strict_positivity),
         ("P12 relabelling invariance", check_p12_relabelling_invariance),
@@ -408,4 +549,11 @@ def check_all(cost: CostFn, graph: AttackGraph, *,
         ran.append("P6 exact static reduction")
         check_p7_static_ignores_history(static, graph)
         ran.append("P7 static ignores history")
+    if adaptive is not None:
+        check_p1_repetition_never_reduces_risk(adaptive, graph)
+        check_p2_first_repeat_is_strictly_louder(adaptive, graph)
+        ran.append("P2 first repeat strictly louder")
+    if max_step is not None:
+        check_p15_bounded_step(adaptive or cost, graph, max_step=max_step)
+        ran.append("P15 bounded step")
     return ran

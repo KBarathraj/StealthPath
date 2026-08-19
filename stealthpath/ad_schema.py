@@ -22,6 +22,7 @@ __all__ = [
     "TRAVERSABLE_EDGES",
     "STRUCTURAL_EDGES",
     "PARTIAL_RIGHT_EDGES",
+    "COMPOSITE_RIGHTS",
     "GPO_EXPANSION_EDGES",
     "LOCAL_ADMIN_EXPANSION_EDGES",
     "PRIVILEGED_LOCAL_GROUP_RIDS",
@@ -196,6 +197,30 @@ straight to full domain compromise, cheaper than DCSync. See
 The real GPO chain is unaffected: it runs `GenericWrite -> GPLink -> Contains`
 onto an already-linked GPO and never touches `WriteGPLink`. See
 `AttackGraph.with_gpo_expansion`.
+"""
+
+COMPOSITE_RIGHTS: dict[str, frozenset[str]] = {
+    "DCSync": frozenset({"GetChanges", "GetChangesAll"}),
+    "SyncLAPSPassword": frozenset({"GetChanges", "GetChangesInFilteredSet"}),
+}
+"""Composite edges, mapped to the component rights they subsume.
+
+This is the prose in `PARTIAL_RIGHT_EDGES` above made machine-readable, not a
+new claim — that docstring already states both pairings. It exists so an
+invariant can check what the prose asserts: **a composite cannot be quieter than
+a component it subsumes**, because exercising the composite means exercising the
+component. See `test_no_composite_is_quieter_than_a_component_it_subsumes`.
+
+It was written after that exact inversion went unnoticed. `GetChanges` and
+`GetChangesAll` sat at 8.0 while `DCSync` was sourced down to 6.5 — halves
+louder than the whole. Nothing caught it, and nothing *could* have: all three
+components are non-traversable, so no route reads their weights and no `compare`
+run can surface the contradiction. A weight nothing reads is a weight nothing
+checks, which is what makes a static invariant the only available guard.
+
+`WriteGPLink` is deliberately absent. It is in `PARTIAL_RIGHT_EDGES` for the
+other reason documented above — there is no composite in BloodHound to map it
+to — so it has no entry here and the invariant has nothing to say about it.
 """
 
 TRAVERSABLE_EDGES = (frozenset(EDGE_CATEGORIES)

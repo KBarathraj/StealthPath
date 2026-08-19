@@ -1,6 +1,6 @@
 # Handoff
 
-**As of 2026-08-10.** `187 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
+**As of 2026-08-19.** `194 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
 
 Read `CLAUDE.md` first for the build rules, then this. To find your way around
 the code without reading it all, use the graph index — see "Finding your way
@@ -16,8 +16,15 @@ and a learning planner that adapts. The question is whether the learning planner
 beats a well-tuned static one at staying quiet, and whether that depends on risk
 changing based on what the attacker already did.
 
-Planners 1 and 2 are built and run on real collected data. Planner 3 is not
-started and is correctly paused.
+**All three planners are built and run on the real collected data**, plus a
+fourth that exists to score the third: an exact history-aware search used as the
+optimal reference, so the learner reports as an optimality gap rather than a
+training curve.
+
+**The headline result is negative and that is the finding.** Adaptive planning
+changes no route on this graph, at any repeat penalty. See "The Shape D collapse"
+in `abstract.md` — the claim is a conditional with a measured antecedent, not an
+unconditional statement about AD.
 
 ---
 
@@ -29,8 +36,9 @@ drifted, and one of them ended up claiming Stage 3 had not started while the
 other correctly reported most of its properties implemented. The Stage 3 exit
 criteria are in the same file, immediately below Status.
 
-The short version, for orientation only: Stage 1 done, Stage 2 software done,
-Stage 2 sourcing and Stage 3 both in progress, Stages 4–5 not started.
+The short version, for orientation only: Stages 1-4 done, Stage 5's experiments
+done with the write-ups outstanding, Stage 7 (dashboard) proposed and awaiting a
+decision.
 
 **Frozen graph:** `data/goad_graph.json`, sha256 `3c1bef97f75df7d2…`
 783 nodes / 5825 edges. Published GOADv2 SharpHound 2.3.3 collection
@@ -54,26 +62,35 @@ file, did not find the key, and wrongly reported the figure as unverifiable. The
 
 ## Immediate next steps, in order
 
-1. **Price `DCSync`, alone, and stop.** Report before touching anything else. It
-   anchors the headline and it is the single most consequential number left in
-   the table. The 1.5 error happened because the last item in a long pass got
-   the least scrutiny — so `DCSync` does not go in a pass with six other edges.
+**Everything experimental is done.** H1-H6 are measured, Stage 3's gate is
+closed, both Stage 4 tiers are built, and every number is reproducible from
+committed artifacts. What remains is writing, plus one scoping decision.
 
-   **Answer the weight-sensitivity question in the same pass**, while the
-   machinery is loaded: *at what `DCSync` weight does `SQL_SVC`'s avoidance stop
-   being preferred?* That threshold is reportable either way and it turns the
-   result's weight-sensitivity into a measurement rather than a caveat.
+1. **Finish the writing.** In dependency order, roughly a day and a half:
+   - **Figure 3** - `SQL_SVC`'s route comparison. The headline result currently
+     exists only as prose. Plain `SQLAdmin -> HasSession -> AdminTo -> DCSync`
+     (4h, 20.00) against weighted `SQLAdmin -> HasSession -> MemberOf ->
+     GenericWrite` (4h, 15.10); same hop count, `DCSync` avoided, gap 4.9.
+   - **Optimality-gap write-up.** State the reproducibility claim plainly: two
+     independent 50,000-episode runs produced a byte-identical artifact
+     (`7a5d92df`), and the +0.00% gap held across three entry points and five
+     seeds. That answers "did you cherry-pick a seed" mechanically, and most RL
+     work cannot make the first claim at all.
+   - **Related work.** Three verified facts from arXiv:2406.19596, all confirmed
+     against the primary source: it models **three** BloodHound edge types
+     (`AdminTo`, `HasSession`, `MemberOf`) with no access-control edges at all;
+     its graphs are DBCreator synthetics at **r500 (1,493/3,456), r1000
+     (2,996/8,814), r2000 (5,997/18,795)**; and it states single-domain scope
+     with one Domain Admin target, so the cross-forest axis is usable as a
+     **scope difference, never a superiority claim**. Two corrections to make
+     while there: that paper is Data61/CSCRC-led with Adelaide co-authorship, so
+     "the Adelaide programme" is imprecise for it, and the r-graph sizes are
+     r500/r1000/r2000 rather than the r1000/r2000/r4000 currently written.
 
-2. **Then the remaining seven, in a pass of their own**: `AdminTo`, `SQLAdmin`,
-   `HasSession`, `ForceChangePassword`, `AddMember`, `MemberOf`, `AddSelf`. Both
-   baseline halves checked per edge. `MemberOf` and `AddSelf` stay trivial.
-3. **Build the Stage 3 history-dependent model**, then the three remaining gate
-   properties (P1, P2, P15) which need it to exist first.
-4. Planner #3 after that, not before.
-
-Prerequisite for step 1 is **done**: the Shape D collapse and the `SQL_SVC`
-magnitude-sensitivity are both written up in `findings.md` (2026-08-09), which
-is what had to land before `DCSync` was priced.
+2. **Decide the dashboard scope.** Stage 7 came back into scope on 2026-08-19:
+   faculty expect an upload-a-graph demo showing all three planners, with a
+   validation layer. A full proposal was delivered and is awaiting a decision -
+   see "Dashboard - proposed, not started" below.
 
 ---
 
@@ -87,7 +104,7 @@ is what had to land before `DCSync` was priced.
   figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
   weights, and the H5/H6 artifact values.
 
-  **Hand-maintained, and it is the pytest counts.** `187 passed, 2 skipped`
+  **Hand-maintained, and it is the pytest counts.** `194 passed, 2 skipped`
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in
@@ -221,6 +238,67 @@ reading it. Three reasons that separation is not optional:
 
 `graphify query "<question>"` exists but is weak — it returns a truncated
 keyword-matched node list, not an answer. Prefer `explain` and `affected`.
+
+## Dashboard — proposed, not started
+
+Stage 7 came back into scope on 2026-08-19. Faculty expect an upload-a-graph demo
+showing all three planners. A proposal was delivered and **awaits a decision**;
+nothing is built.
+
+**Why a validation layer is mandatory, not decoration.** 19 dropped edge types,
+no ADCS, 14 unsourced weights. An arbitrary BloodHound export contains types we
+drop and paths we cannot price, and without a validator the tool prints three
+confident numbers that are wrong. Surfacing coverage turns the limitation into a
+feature.
+
+**The blocking finding — "reuse the existing loader" is not satisfiable as
+stated.** `loader_neo4j.py` reads from a **live Neo4j driver** (Cypher `MATCH`,
+`session.run`); it cannot read a file. `AttackGraph.from_dict` accepts **only**
+our frozen format and raises on anything else. There is no BloodHound CE JSON
+parser anywhere in the repo, and "reuse the loader" plus "no live Neo4j" cannot
+both hold for an upload.
+
+What *is* reusable is the part that matters, because the semantics are
+module-level functions with no driver dependency: `admit_edge()` (rule 4 at the
+boundary), `_primary_kind()`, `jsonable()`, `_is_owned()`, `_is_high_value()`,
+and the `dropped_unknown_edge_types` provenance recording. So the honest form is
+**new transport, zero new semantics** — an adapter that emits `(nodes, edges)`
+and routes every categorisation and admission decision through those functions.
+
+**The parser dominates the cost and carries the most risk.** A BloodHound CE
+export is a zip of `users.json`, `groups.json`, `computers.json`, `domains.json`,
+`gpos.json`, `ous.json`, `containers.json`, and the edges are not a flat list —
+they are nested inside `Aces`, `Members`, `Sessions`, `LocalAdmins`,
+`ChildObjects`, `Links` and `AllowedToDelegate` on each object. Reconstructing
+the edge set is what BloodHound's own ingest does. **The validator cannot catch a
+parser that mis-maps an edge type**: a wrong `WriteDacl` → `GenericAll` mapping
+yields 100% coverage and confident wrong numbers.
+
+**Recommended stack.** FastAPI plus one static page with Cytoscape.js. Python
+does every computation; JS only draws, so the cost model never crosses the
+language boundary. Roughly 7-9 days, over half of it the parser. Cheaper
+fallback if writing is at risk: Streamlit, ~1.5 days, frozen-format upload only,
+no BloodHound parser.
+
+**Q-learning is never trained live** — 11k-37k episodes would hang the UI.
+Convenient fact: the trained Q-table is not persisted anywhere (`train()` returns
+it in memory and nothing saves it), but `results/h5_h6.json` already stores the
+Q-learning *results* for both frozen graphs. So "pre-trained" means *stored
+result*, not *stored model*, and the dashboard's numbers match `findings.md` by
+construction.
+
+**Constraints that hold.** Frozen graphs immutable; upload creates a
+session-scoped graph and never re-freezes anything on disk. No live Neo4j. No
+retraining. Every number shown for the frozen graphs must match `findings.md` —
+if the dashboard computes something the paper does not report, that is a bug.
+An honesty panel (dropped types, deferred weights, near-zero sessions, zero
+delegation) is visible without being asked.
+
+**Recommendation on record:** finish the writing first — it is roughly a day and
+a half against the dashboard's seven to nine. If the demo date forces overlap,
+take the Streamlit fallback and drop the parser. A dashboard that loads two
+frozen graphs and reports them honestly demonstrates the research; one that
+mis-parses an examiner's upload live demonstrates the opposite.
 
 ## Where things live
 

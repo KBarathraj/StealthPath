@@ -28,7 +28,7 @@ the next thing to do.
 ```bash
 python -m venv .venv && .venv/Scripts/activate     # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                                    # 187 pass + 2 skipped, no network, no database
+pytest -q                                    # 194 pass + 2 skipped, no network, no database
 ```
 
 ```bash

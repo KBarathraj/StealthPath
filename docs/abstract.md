@@ -364,6 +364,14 @@ would otherwise let a claim about five types stand on evidence about four —
 convergence in the output of two independent derivations is a property of a
 coarse weight scale, not evidence of a shared cause.
 
+**The two shares differ by 0.02 points, so a five-type claim could have rested on
+four-type evidence indefinitely without ever producing a contradiction.** That is
+the argument for pinning *membership* rather than share:
+`test_modal_class_membership_is_five_types_but_four_share_the_signature` asserts
+the exact set at the modal weight, that `ForceChangePassword` contributes one
+edge, and that its channels differ from the other four. A share can agree to two
+decimals while the claim behind it is wrong; a membership set cannot.
+
 Concentration on one derived weight **removes what a risk-aware planner has to
 trade against**. Where every alternative costs the same, there is no cheaper
 route to find and no ordering to exploit — not because the planner is weak, but

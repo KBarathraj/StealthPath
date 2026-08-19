@@ -110,7 +110,7 @@ def main() -> None:
     fig.tight_layout()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "svg"):
-        fig.savefig(f"{OUT}.{ext}", dpi=200, bbox_inches="tight")
+        fig.savefig(f"{OUT}.{ext}", dpi=400, bbox_inches="tight")
     plt.close(fig)
 
     print(f"wrote {OUT.relative_to(ROOT)}.png / .svg")

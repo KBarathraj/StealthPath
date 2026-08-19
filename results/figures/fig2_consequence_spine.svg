@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 698" width="1000" height="698" font-family="Georgia, Times New Roman, serif">
+<rect width="1000" height="698" fill="#ffffff"/>
+<defs><pattern id="bnd" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#e4e4e4" stroke-width="1.7"/></pattern></defs>
+<text x="40" y="42" font-size="17" font-weight="bold" fill="#1a1a1a">One mechanism, five consequences, one boundary</text>
+<rect x="40" y="60" width="920" height="82" rx="4" fill="#1a1a1a"/>
+<text x="62" y="88" font-size="13.5" fill="#ffffff" font-weight="bold">MECHANISM &#8212; 4 access-control edge types produce <tspan font-style="italic">one</tspan> detection signature</text>
+<text x="62" y="110" font-size="12" fill="#d6d6d6">under the stated telemetry baseline, so 79.4% of walkable edges carry a single derived cost,</text>
+<text x="62" y="129" font-size="12" fill="#d6d6d6">leaving no gradient for a cost-aware planner to climb.</text>
+<rect x="40" y="174" width="920" height="72" rx="3" fill="#ededed" stroke="#c9c9c9" stroke-width="1"/>
+<rect x="54" y="201" width="17" height="17" fill="#1a1a1a"/>
+<text x="88" y="201" font-size="11" fill="#8a8a8a" font-weight="bold">1</text>
+<text x="108" y="201" font-size="12.5" fill="#1a1a1a" font-weight="bold" font-family="Consolas, Menlo, monospace">SAMWELL</text>
+<text x="88" y="221" font-size="13.5" fill="#1a1a1a">Risk-weighting has nothing to choose</text>
+<text x="88" y="238" font-size="11" fill="#4a4a4a">Both planners return the same route at the same cost</text>
+<text x="938" y="199" font-size="10" fill="#8a8a8a" text-anchor="end" letter-spacing="0.8">H2</text>
+<rect x="40" y="258" width="920" height="72" rx="3" fill="#ededed" stroke="#c9c9c9" stroke-width="1"/>
+<rect x="54" y="285" width="17" height="17" fill="#1a1a1a"/>
+<text x="88" y="285" font-size="11" fill="#8a8a8a" font-weight="bold">2</text>
+<text x="108" y="285" font-size="12.5" fill="#1a1a1a" font-weight="bold" font-family="Consolas, Menlo, monospace">H1</text>
+<text x="88" y="305" font-size="13.5" fill="#1a1a1a">No hops-versus-risk frontier exists</text>
+<text x="88" y="322" font-size="11" fill="#4a4a4a">Hop counts identical on all three entry points</text>
+<text x="938" y="283" font-size="10" fill="#8a8a8a" text-anchor="end" letter-spacing="0.8">H1</text>
+<rect x="40" y="342" width="920" height="72" rx="3" fill="#ededed" stroke="#c9c9c9" stroke-width="1"/>
+<rect x="54" y="369" width="17" height="17" fill="#1a1a1a"/>
+<text x="88" y="369" font-size="11" fill="#8a8a8a" font-weight="bold">3</text>
+<text x="108" y="369" font-size="12.5" fill="#1a1a1a" font-weight="bold" font-family="Consolas, Menlo, monospace">TYWIN</text>
+<text x="88" y="389" font-size="13.5" fill="#1a1a1a">History-dependence has nothing to re-rank</text>
+<text x="88" y="406" font-size="11" fill="#4a4a4a">Cost moves, route does not - and still does not at k = 10</text>
+<text x="938" y="390" font-size="14" fill="#1a1a1a" text-anchor="end" font-weight="bold" font-family="Consolas, Menlo, monospace">39.5 -&gt; 44.5</text>
+<text x="938" y="367" font-size="10" fill="#8a8a8a" text-anchor="end" letter-spacing="0.8">H3</text>
+<text x="960" y="430" font-size="10" fill="#4a4a4a" text-anchor="end" letter-spacing="1.3">BOUNDARY &#8212; DISCRIMINATION SURVIVES OUTSIDE THE COLLAPSED CLASS</text>
+<line x1="40" y1="444" x2="960" y2="444" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="5 4"/>
+<rect x="40" y="460" width="920" height="72" rx="3" fill="#ffffff" stroke="#c9c9c9" stroke-width="1"/>
+<rect x="40" y="460" width="920" height="72" rx="3" fill="url(#bnd)"/>
+<circle cx="62.5" cy="495.5" r="8.5" fill="#ffffff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="88" y="487" font-size="11" fill="#8a8a8a" font-weight="bold">4</text>
+<text x="108" y="487" font-size="12.5" fill="#1a1a1a" font-weight="bold" font-family="Consolas, Menlo, monospace">SQL_SVC</text>
+<text x="88" y="507" font-size="13.5" fill="#1a1a1a">Sensitivity is set by a minority-class edge</text>
+<text x="88" y="524" font-size="11" fill="#4a4a4a">Threshold is GenericWrite, not DCSync - the collapsed value</text>
+<text x="938" y="508" font-size="14" fill="#1a1a1a" text-anchor="end" font-weight="bold" font-family="Consolas, Menlo, monospace">threshold = 4</text>
+<text x="938" y="485" font-size="10" fill="#8a8a8a" text-anchor="end" letter-spacing="0.8">H4</text>
+<rect x="40" y="544" width="920" height="72" rx="3" fill="#ffffff" stroke="#c9c9c9" stroke-width="1"/>
+<rect x="40" y="544" width="920" height="72" rx="3" fill="url(#bnd)"/>
+<circle cx="62.5" cy="579.5" r="8.5" fill="#ffffff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="88" y="571" font-size="11" fill="#8a8a8a" font-weight="bold">5</text>
+<text x="108" y="571" font-size="12.5" fill="#1a1a1a" font-weight="bold" font-family="Consolas, Menlo, monospace">P1 / P2</text>
+<text x="88" y="591" font-size="13.5" fill="#1a1a1a">Only the minority perturbation re-ranks</text>
+<text x="88" y="608" font-size="11" fill="#4a4a4a">ACL edge inside the majority: nothing. Membership edge outside it: moves</text>
+<text x="938" y="592" font-size="14" fill="#1a1a1a" text-anchor="end" font-weight="bold" font-family="Consolas, Menlo, monospace">9h -&gt; 7h</text>
+<text x="938" y="569" font-size="10" fill="#8a8a8a" text-anchor="end" letter-spacing="0.8">H5/H6</text>
+<text x="40" y="682" font-size="10" fill="#8a8a8a">Rows 1 and 2 carry no value: they report absences, and a figure cannot show an absence with a number. Majority rows are solid-marked, boundary rows open-marked and hatched - no information is carried by hue.</text>
+</svg>

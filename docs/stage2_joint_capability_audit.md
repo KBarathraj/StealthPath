@@ -59,6 +59,93 @@ Note this interacts with the `GPLink` traversal exclusion. `GPLink` (the
 structural edge) is already excluded; `WriteGPLink` (the ACL edge) is not, and
 they are easy to confuse when reading the schema quickly.
 
+### External corroboration — a general-purpose graph tool collapsed the distinction by default
+
+Shape A depends on a property of our representation that is easy to take for
+granted: `GetChanges` and `GetChangesAll` are **two separate edges between the
+same pair of nodes**. Build rule 2 exists to keep them that way. The rule has
+until now been justified by argument — that collapsing parallel edges would
+throw away the risk signal — without an instance of anything actually doing it.
+
+There is now an instance, and it was not adversarial. On 2026-08-09 the graphify
+indexer was run over this repository to build a code-navigation graph. Its
+diagnostic on that build:
+
+```
+raw_edges:                                    1140
+undirected_same_endpoint_collapsed_edges:       34
+directed_same_endpoint_collapsed_edges:         30
+same_endpoint_group_count:                      20
+relation_variant_groups:                        14
+post_build_edges:                             1072
+```
+
+It deduplicated by endpoint pair. Not as a bug and not as a configuration
+mistake — as its default graph construction. **14 of the 20 collapsed groups
+held edges of *different relation types***, which is the exact structure of the
+Shape A pattern: two distinct relationships between one pair of nodes, merged
+into one because the pair is the same.
+
+The scope of the claim, stated precisely so it is not overread: graphify built a
+graph **of this repository's source code**, not of Active Directory. It did not
+misprice an AD edge and it makes no claim about AD. What it demonstrates is
+narrower and sufficient — that endpoint-pair deduplication is the *default
+behaviour* of a general-purpose graph tool, applied by a competent
+implementation to a repository whose own documentation forbids it.
+
+**Why this strengthens Shape A rather than merely illustrating it.** Under
+endpoint-pair deduplication the replication bug is not mispriced, it is
+**invisible**. Collapse `GetChanges` and `GetChangesAll` into a single edge
+between principal and domain and the question this audit asks — *does the
+attacker hold one right or both?* — can no longer be posed, because the
+representation has discarded the only thing that distinguishes the two cases.
+The bug was findable here because the multigraph kept both edges; it would not
+have been findable in the collapsed representation, and nothing would have
+signalled the loss.
+
+So the taxonomy's first shape is not a hypothetical hazard that a careless
+implementer might introduce. It is what a graph tool does unless someone
+deliberately stops it, and the stopping is build rule 2.
+
+### Second independent failure at the same site — this time in pricing
+
+On 2026-08-09, sourcing `DCSync` down from 9.0 to 6.5 left `GetChanges`,
+`GetChangesAll` and `GetChangesInFilteredSet` stranded at 8.0. **The halves were
+priced louder than the whole**, which cannot be true: exercising the composite
+means exercising the components.
+
+This is a different error from the one this audit was written about. The
+original was a **traversal** error — walking one half claims a capability the
+attacker does not hold. This is a **pricing** error, and neither implies the
+other. What they share is a location.
+
+**Why that is worth recording rather than filing as an unrelated slip.** The
+replication triple is the one place in the schema where a single capability is
+split across multiple edges. Everything the audit says about Shape A follows
+from that split — and the split turns out to create drift in more than one
+dimension. Two failure modes, arrived at independently, both landing on the only
+edges that are structurally divided.
+
+**And it survived for the reason Shape A edges are hard to check at all.** All
+three components are non-traversable, so no route touches them, so no `compare`
+run can ever produce a number that contradicts their weights. Every other weight
+in the table is checked implicitly and continuously by the routes it appears on.
+These three have no such check. A weight nothing reads is a weight nothing
+checks.
+
+That is now guarded by `ad_schema.COMPOSITE_RIGHTS` and
+`test_no_composite_is_quieter_than_a_component_it_subsumes` — a static invariant,
+because static is the only kind available where no route reaches the thing being
+checked. The mapping encodes what the `PARTIAL_RIGHT_EDGES` docstring already
+asserts; it adds no new claim about the schema.
+
+**Read alongside the graphify corroboration above, the two say the same thing
+from different directions.** A general-purpose tool collapses these edges by
+default; our own pricing let them drift apart unnoticed. Splitting a capability
+across edges is correct and is what makes the attacker model honest — and it
+costs vigilance in both directions, merge and drift, neither of which the system
+surfaces on its own.
+
 ---
 
 ## Shape B — edge plus a node property that isn't checked
@@ -600,11 +687,16 @@ extra signal to charge for.
 
 ---
 
-## One-line triage for the remaining eight gate weights
+## One-line triage for the remaining seven gate weights
 
 No pricing, no derivation — the shape of the problem only, so the next pass
-starts from something rather than nothing. All eight sit on a chosen or rejected
+starts from something rather than nothing. All seven sit on a chosen or rejected
 route for the three documented entry points.
+
+**`DCSync` is done** (2026-08-09) and its row is kept below, struck through,
+because the triage guess is worth comparing against the outcome: the guess was
+right about the SACL dependency surviving and said nothing about the *level*,
+which fell from 9.0 to 6.5 on the impact-vs-loudness check.
 
 | Edge | Shape of the problem |
 |---|---|
@@ -612,7 +704,7 @@ route for the three documented entry points.
 | `AdminTo` | Admin logon to a host — 4624/4672 fire by default, no SACL needed, but the volume is enormous. Visibility without suspicion; the base-rate argument from `CanRDP` applies directly. |
 | `SQLAdmin` | **Decided: SQL Server auditing does NOT clear the bar.** It is off by default and is per-application audit configuration, which the baseline does not grant — the baseline covers standard EDR plus native *AD* auditing, not per-app setup. Price on what EDR sees instead: `sqlservr.exe` spawning `cmd.exe`/`powershell.exe`, and `xp_cmdshell` process creation. That is a strong signal — process lineage is hard to evade because command execution needs a child process, unlike the ACL writes where renaming a cmdlet defeats the rule. Expect it to price **above** the ACL-write base. |
 | `HasSession` | Already re-checked under the revised baseline and held at 6.0 (Sysmon Event 10, EDR-visible, no SACL dependency). Needs a named rule to finish, not a re-derivation. |
-| `DCSync` | 4662 with the replication GUIDs. **The one edge whose SACL dependency probably survives** — it is the canonical AD detection and shops enable it *because* of this attack. Confirm rather than assume. |
+| ~~`DCSync`~~ | ~~4662 with the replication GUIDs. **The one edge whose SACL dependency probably survives** — it is the canonical AD detection and shops enable it *because* of this attack. Confirm rather than assume.~~ **DONE — sourced 6.5.** SACL dependency confirmed (domain root is tier-zero, so the channel fires). The guess was silent on level; 9.0 turned out to be impact, not loudness. |
 | `ForceChangePassword` | 4724 fires by default with no SACL. Also destructive — the user is locked out and notices — but that is the named non-telemetry limitation and must not be folded into the number. |
 | `AddMember` | 4728/4732/4756 fire by default, no SACL, and privileged-group modification is among the most widely alerted events in AD. Likely the loudest of these eight after `DCSync`. |
 | `AddSelf` | Same events as `AddMember`, attacker as the subject. Expect the same number; check whether anything distinguishes them in the log. |

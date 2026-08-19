@@ -3,7 +3,9 @@
 **As of 2026-08-05.** `120 passed, 3 skipped`. Branch `main`, 13 commits, clean
 tree. Everything below runs with no network, no database, no lab.
 
-Read `CLAUDE.md` first for the build rules, then this.
+Read `CLAUDE.md` first for the build rules, then this. To find your way around
+the code without reading it all, use the graph index — see "Finding your way
+around" below.
 
 ---
 
@@ -22,13 +24,14 @@ started and is correctly paused.
 
 ## State
 
-| | |
-|---|---|
-| Stage 1 (graph, loader, Dijkstra, CLI) | done |
-| Stage 2 software | done |
-| Stage 2 sourcing | **10 of 35 weights**, 5 of the 13 that gate Stage 3 |
-| Stage 3 | spec written, **model not built**; 6 of 8 gate properties implemented |
-| Stages 4–5 | not started |
+**Stage status lives in `CLAUDE.md`, in the Status block — read it there.** It
+is deliberately not repeated here. This file used to carry its own copy, the two
+drifted, and one of them ended up claiming Stage 3 had not started while the
+other correctly reported most of its properties implemented. The Stage 3 exit
+criteria are in the same file, immediately below Status.
+
+The short version, for orientation only: Stage 1 done, Stage 2 software done,
+Stage 2 sourcing and Stage 3 both in progress, Stages 4–5 not started.
 
 **Frozen graph:** `data/goad_graph.json`, sha256 `3c1bef97f75df7d2…`
 783 nodes / 5825 edges. Published GOADv2 SharpHound 2.3.3 collection
@@ -38,44 +41,40 @@ superseded hashes lives in `data/collection_provenance.json`.
 
 **Three structural holes in the data**, all recorded, none fixable without our
 own lab: sessions near-absent (5 `HasSession` edges), zero delegation edges,
-ADCS dropped (19 edge types still discarded).
+ADCS dropped (19 edge types still discarded, 2,443 edges).
+
+All three are checkable rather than asserted, and the 19 is easy to look for in
+the wrong place: it lives in **`data/goad_graph.json` itself**, under
+`provenance.dropped_unknown_edge_types`, written by the loader
+(`loader_neo4j.py`) at freeze time — *not* in `data/collection_provenance.json`,
+which only points at it. An audit on 2026-08-10 checked the separate provenance
+file, did not find the key, and wrongly reported the figure as unverifiable. The
+19 entries and the 2,443-edge total are correct.
 
 ---
 
 ## Immediate next steps, in order
 
-1. **Write up two findings** that are decided but not yet documented — see
-   "In flight" below. Item (b) must land *before* `DCSync` is priced.
-2. **Source the remaining eight gate weights**, `DCSync` first because
-   everything else compares against it and the headline result rests on it:
-   `DCSync`, `AdminTo`, `SQLAdmin`, `HasSession`, `ForceChangePassword`,
-   `AddMember`, `MemberOf`, `AddSelf`. `MemberOf` and `AddSelf` are near-trivial.
+1. **Price `DCSync`, alone, and stop.** Report before touching anything else. It
+   anchors the headline and it is the single most consequential number left in
+   the table. The 1.5 error happened because the last item in a long pass got
+   the least scrutiny — so `DCSync` does not go in a pass with six other edges.
+
+   **Answer the weight-sensitivity question in the same pass**, while the
+   machinery is loaded: *at what `DCSync` weight does `SQL_SVC`'s avoidance stop
+   being preferred?* That threshold is reportable either way and it turns the
+   result's weight-sensitivity into a measurement rather than a caveat.
+
+2. **Then the remaining seven, in a pass of their own**: `AdminTo`, `SQLAdmin`,
+   `HasSession`, `ForceChangePassword`, `AddMember`, `MemberOf`, `AddSelf`. Both
+   baseline halves checked per edge. `MemberOf` and `AddSelf` stay trivial.
 3. **Build the Stage 3 history-dependent model**, then the three remaining gate
    properties (P1, P2, P15) which need it to exist first.
 4. Planner #3 after that, not before.
 
----
-
-## In flight — decided, not yet written up
-
-**(a) The Shape D collapse is a finding, not an implementation detail.** All
-four ACL-write edges derive to the same 4.0 base because the EDR signal does not
-distinguish *which* right is being written. That means 80.4% of the graph carries
-one weight. The claim: under an EDR-dominated posture the graph's dominant edge
-distinction is invisible to the defender, so cost models assigning different
-constants to `WriteDacl`/`WriteOwner`/`GenericAll`/`GenericWrite` are encoding
-**authority, not observability**. Falls straight out of the impact-vs-loudness
-check. Honest consequence: it reduces the static planner's discriminating power
-here, which raises the stakes for whether the history-dependent planner finds
-anything the static one cannot.
-
-**(b) `SQL_SVC`'s gap is direction-robust and magnitude-sensitive.** It has been
-7.4, then 10.4, then 7.9 across three derivations in one session. The
-*qualitative* result is the claim — identical hop count, `DCSync` avoided
-entirely. The number is not. **Record this before `DCSync` is priced** so it
-cannot read as a retrofit if the gap narrows. If sourcing `DCSync` moves it
-substantially that is itself reportable, and feeds the robustness analysis
-directly: *at what `DCSync` weight does the avoidance stop being preferred?*
+Prerequisite for step 1 is **done**: the Shape D collapse and the `SQL_SVC`
+magnitude-sensitivity are both written up in `findings.md` (2026-08-09), which
+is what had to land before `DCSync` was priced.
 
 ---
 
@@ -157,10 +156,48 @@ Three documented entry points, all with verified routes:
 
 ---
 
+## Finding your way around
+
+`graphify-out/` holds a queryable index of this repo — 560 nodes, 1,072 edges,
+built from tree-sitter AST extraction plus a semantic pass over the docs. It
+exists so a session can locate things without reading whole modules. It is
+gitignored and regenerable; it is **not** a collection and never a citation.
+
+```bash
+graphify god-nodes                            # core abstractions
+graphify explain "static_cost_fn()"           # what a symbol touches, file:line, direction
+graphify affected "RiskWeight" --depth 2      # what breaks if I change this
+graphify path "AttackGraph" "weight_of()" --undirected
+graphify update .                             # rebuild after edits — nothing does this automatically
+```
+
+`affected` is the one that pays for itself here. Changing a weight reaches 55
+nodes across `risk.py`, both planners, `cli.py`, `snapshot_weights.py` and three
+test files — one call, versus a grep sweep and several file reads.
+
+**Then open the file.** The index gives you a location; the content comes from
+reading it. Three reasons that separation is not optional:
+
+- **`data/collection_provenance.json` is not in the graph at all.** It extracted
+  to zero nodes, as did `weight_snapshot.json` and `pyproject.toml`. Provenance
+  and snapshot questions have to go to the file — the graph will return nothing
+  rather than tell you it can't answer.
+- **It collapses parallel edges.** Built undirected, so 34 same-endpoint edges
+  became one. That is the deduplication build rule 2 forbids in `AttackGraph`;
+  the index is not multigraph-faithful and its edge counts should not be quoted.
+- **The doc half is model-generated.** 408 nodes are deterministic AST output;
+  152 came from an LLM reading `docs/` and `README.md`, carry `INFERRED` edges
+  below confidence 1.0, and would come out differently on a re-run. Nothing in
+  this project's evidence chain may rest on that.
+
+`graphify query "<question>"` exists but is weak — it returns a truncated
+keyword-matched node list, not an answer. Prefer `explain` and `affected`.
+
 ## Where things live
 
 | | |
 |---|---|
+| `graphify-out/` | queryable code index (gitignored, regenerable, never a citation) |
 | `docs/abstract.md` | merged framing, contributions, H3 scope statement |
 | `docs/findings.md` | running results log, every entry tied to a graph hash |
 | `docs/stage2_joint_capability_audit.md` | telemetry baseline, named failure modes, per-edge status |

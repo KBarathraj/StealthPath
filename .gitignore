@@ -5,3 +5,7 @@ __pycache__/
 CLAUDE.md
 # data/ is NOT ignored. Frozen graphs are committed on purpose — Stage 5 cites a
 # graph by hash, and a re-collection would silently change the substrate.
+# graphify-out/ IS ignored, and is the opposite case: a regenerable index of the
+# source tree, not a collection. It is not an AD graph and must never be cited
+# as one.
+graphify-out/

@@ -291,10 +291,102 @@ severity ordering that now exists but is unexercised (no comparable pairs in the
 frozen graph). P13 (locality) and P16 (monotone in penalty) are hygiene: real,
 but their failure produces implausible numbers rather than wrong conclusions.
 
-**Already implemented: 6 of the 8** — P6, P7, P9, P12, P14 plus P13 (which is in
-the deferred list but was cheap and is done). **Remaining work: P1, P2, P15**,
-all three of which require the history-dependent model to exist first, so they
-are written alongside it rather than before it.
+**All 8 implemented — gate closed 2026-08-09.** P6, P7, P9, P12, P14 landed
+first; P1, P2 and P15 landed alongside the history-dependent model, which they
+required to exist. P13 is also done and is in the deferred list, which is why an
+earlier version of this line said "6 of the 8" — it was counting a deferred
+property toward the gate. The gate is 8 and all 8 are in
+`stealthpath/risk_properties.py`, each with a paired test in
+`tests/test_stage3_properties.py` proving it fires against a deliberately
+violating model.
+
+### The model these are checked against
+
+`risk.history_cost_fn` — Summary A, proportional repeat step `weight × k` on the
+first repeat of a category and non-decreasing thereafter, `k = 1.2`.
+
+**Proportional rather than uniform**, decided against the alternative rather than
+by default. A uniform additive step charges the same increment for repeating
+`MemberOf` as for repeating `DCSync`; `MemberOf` is sourced at the floor with
+both baseline halves `NONE_FOUND`, so a fixed step would manufacture detection
+where the sourcing pass found none — on the hop that decides the `SQL_SVC` route.
+It would also model a defender who tracks category repetition independently of
+severity, which is the correlation capability the baseline excludes.
+
+**`k` is declared, not derived.** Nothing in the telemetry baseline fixes it: the
+sourcing pass priced first occurrences and says nothing about second sightings.
+The defence is the sweep — conclusions reported as the range of `k` over which
+they hold — not the point value. P16 (deferred) is the property covering that
+axis.
+
+**P15's bound is against `WEIGHT_CEILING`, deliberately.** Bounding against the
+largest weight actually present would make P15 fail later when an unrelated
+weight is sourced upward, which is the hidden-dependency pattern that caused
+documented drift earlier. Bound = 25% of range = 2.0; today's actual maximum step
+is 1.3. Two different numbers and `test_the_declared_bound_is_not_the_observed_step`
+stops them being conflated.
+
+### Limitation — the nine categories do not all share a detection rule
+
+Recorded as a limitation rather than fixed, and demonstrated rather than
+hypothesised.
+
+**`acl_abuse` is the instance.** It holds ten edge types that split into two
+incompatible detection shapes:
+
+| edges | channels | rule |
+|---|---|---|
+| `WriteDacl`, `WriteOwner`, `GenericAll`, `GenericWrite` | `native_ad_sacl` + `endpoint_named_rule` | PowerView cmdlet names in script-block logging |
+| `AddMember`, `AddSelf` | `native_default_channel` + `endpoint_none_found` | 4728 audit rule, level *low* |
+
+Different events, different baseline halves, different severities, **no shared
+rule**. So `WriteDacl` followed by `AddMember` registers as a category repeat and
+charges a penalty asserting a transfer the baseline does not support.
+
+Five of the nine categories are **singletons** (`domain_replication`,
+`group_membership`, `local_admin`, `session`, `trust`) where category ≡ edge type
+and the grouping asserts nothing extra. `delegation` is partially coherent.
+
+**`credential_access` and `remote_execution` are uncheckable**, and the honest
+statement is that the deferral makes them so: each has exactly one sourced
+member and the rest are in the permanently-deferred set, so category coherence
+can never be verified for them.
+
+**Why this is not fixed.** Splitting `acl_abuse` by detection shape gives ten
+categories and |S| = 783 × 2¹⁰ = 801,792 (~46 MB), which is tractable — but
+|S| = 400,896 is pre-registered and the H3 scope statement in `abstract.md` is
+frozen. Trading a documented weakness for a credibility cost is the wrong trade.
+The proportional step already bounds how far the error travels, since the step is
+computed from the edge actually being taken rather than from whatever preceded
+it. **Logged as future work; the demonstration above is the artifact, not the
+fix.**
+
+### |S| — two figures, each labelled with its traversal set
+
+**Both are reported. Neither replaces the other**, because overwriting the
+pre-registered figure would erase the trail.
+
+| Traversal set | Categories | \|S\| | Use |
+|---|---|---|---|
+| `DEFAULT_TRAVERSAL_SET` | 9 | 783 × 2⁹ = **400,896** | the pre-registered figure; stands as pre-registered |
+| `with_gpo_expansion()` | 10 | 783 × 2¹⁰ = **801,792** | **must accompany any `SAMWELL` / `SQL_SVC` / `TYWIN` result** |
+
+The **9 is a consequence of build rule 3**: structural edges are excluded from
+`DEFAULT_TRAVERSAL_SET`, leaving nine of the ten `EdgeCategory` values reachable.
+`with_gpo_expansion()` re-admits `GPLink` and `Contains`, which restores the
+`structural` category and makes it ten. All three documented entry points are
+planned on that view, so the pre-registered number is *not* the state space the
+reported results live in.
+
+**The coupling fired within one session of being documented.** It was written
+down as a live risk — a build rule silently determining a pre-registered figure —
+before the history model existed, and the first run of the exact search over the
+augmented space surfaced it. That sequence is the methods point: a documented
+risk that never materialises is indistinguishable from an imagined one.
+
+`state_space_size()` computes the figure rather than hard-coding it anywhere, and
+`test_the_gpo_expansion_view_doubles_the_state_space` pins the relationship so it
+cannot drift back into an assumption.
 
 ### Weights: 35 → 12 required
 
@@ -310,9 +402,18 @@ MemberOf      AdminTo    SQLAdmin    HasSession
 DCSync        ForceChangePassword    AddMember  AddSelf
 ```
 
-**Deferred: 17 weights** that sit in the table but on no observed route. They
+**Deferred: 14 weights** that sit in the table but on no observed route. They
 are not wrong to have — a different entry point would exercise them — but they
 cannot change any number currently reported, so they do not gate anything.
+
+*Corrected 2026-08-10, from 17.* The figure was written when 18 of 35 weights
+were sourced and was not updated when the three replication components
+(`GetChanges`, `GetChangesAll`, `GetChangesInFilteredSet`) were sourced alongside
+`DCSync`. **The verified position is 35 weights total, 21 sourced, 14
+unsourced** — all 13 gate weights plus 8 non-gate ones are sourced. Derive it
+rather than quoting it: `risk.unsourced()` returns the list, and
+`tools/run_h5_h6.py` records both counts in `results/h5_h6.json` under
+`risk_model`.
 
 Note `Owns` is **not** in the required set despite being 12.4% of the graph, and
 `GenericAll` is required only because it appears on `TYWIN`'s route — its

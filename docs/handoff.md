@@ -80,6 +80,18 @@ is what had to land before `DCSync` was priced.
 
 ## Decisions that would be expensive to re-derive
 
+- **Provenance is split across two files and neither says so.** The human
+  narrative — why the collection was chosen, what the known gaps are — lives in
+  `data/collection_provenance.json`. The machine record of what the loader
+  actually discarded lives *inside* `data/goad_graph.json`, under `provenance`,
+  written by `loader_neo4j.py` at freeze time. On 2026-08-10 an audit looked for
+  `dropped_unknown_edge_types` in the narrative file, did not find it, and
+  reported the 19-dropped-types figure as unverifiable. The figure was correct;
+  the audit read the wrong file. The narrative file does point at the record, but
+  only in prose inside a `note` field, and the graph file says nothing about the
+  narrative file existing. `tests/test_reported_figures.py` now pins the split so
+  it is visible rather than folklore.
+
 - **Target set** is `tier0_targets()`: DA groups, EA groups, domain objects, by
   well-known name, never by BloodHound's high-value marking. DC computer objects
   are deliberately absent — `isdc` is present in real SharpHound data and agrees

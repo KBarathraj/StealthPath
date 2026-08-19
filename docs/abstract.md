@@ -85,8 +85,8 @@ three hops and the choice is between those two edges; sweeping `DCSync` while
 `AdminTo` moved underneath it left the threshold unmoved, which is how this was
 established rather than assumed. `GenericWrite`'s weight is the **Shape D
 collapse value**: one number carried by all four ACL-write edges because the EDR
-signal cannot distinguish which right is written, and therefore by **80.4% of the
-graph**. That value comes from the *endpoint* half of the telemetry baseline —
+signal cannot distinguish which right is written, and therefore by **79.4% of
+walkable edges** (the modal-weight share). That value comes from the *endpoint* half of the telemetry baseline —
 the half that was omitted in the first derivation, produced a striking and wrong
 headline, and survived a full review pass before being caught. And it rests on a
 Sigma rule matching PowerView function names, which renaming a cmdlet defeats. So
@@ -465,8 +465,8 @@ This is more defensible than the positive result would have been. It is derived
 from sourced evidence — a named rule, a measured edge distribution, an explicit
 telemetry baseline — rather than from a tuned parameter, and it was reached by a
 method that has twice deleted its own findings. A positive H3 on this graph would
-have required believing that the adaptive machinery found signal in the 80.4% of
-edges the defender cannot tell apart.
+have required believing that the adaptive machinery found signal in the 79.4% of
+walkable edges the defender cannot tell apart.
 
 **Registered prediction.** If the `k` sweep shows conclusions flat across `k` on
 this graph, that is a fourth manifestation of the same collapse rather than an

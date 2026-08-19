@@ -153,6 +153,22 @@ together; neither alone can show it. See the named section below.
 
 ---
 
+## Methods note — one pre-registered hypothesis could not have failed
+
+H2 asks whether the risk-weighted planner gives the best tradeoff under static
+risk. It does, and it could not have done otherwise: minimum-cost path over
+non-negative edge weights is solved by A\* with an admissible heuristic, and the
+heuristic used here is admissible by construction. Confirming H2 is therefore a
+**correctness check on the implementation**, not evidence about Active Directory.
+
+Reported here rather than left in the log, because the distinction is what makes
+the other results credible. A hypothesis set in which every entry is winnable
+tells a reader nothing when the entries are confirmed. This one contains a
+hypothesis that could only pass (H2), one that failed on the structure of the
+problem rather than the size of an effect (H1), one answered in the negative
+(H3), and two whose registered prediction was wrong in a way that sharpened the
+claim (H5/H6). Saying which is which is part of the evidence.
+
 ## Methods note — a correct number used in the wrong place
 
 A recurring failure class, named because it has now happened more than once and
@@ -331,6 +347,23 @@ those look identical whether the DACL, the owner, or a generic right is changed.
 **79.4% of walkable edges carry that one derived weight** and 95.3% fall in the
 single `acl_abuse` category.
 
+**Two classes are easy to conflate here and the paper keeps them apart.** The
+*shared-signature* class is those four types: one detection, one derivation, one
+cause. The *modal-weight* class is **five** types — the same four plus
+`ForceChangePassword`, which reaches 4.0 by an unrelated route (default-channel
+4724, no endpoint rule, after the "users notice" impact leak was removed from
+its derivation). A planner cannot tell those five apart, because it sees weights
+and not derivations, so the modal-weight class is the right one for every claim
+about *planning*.
+
+It is the wrong one for claims about the detection surface, and the difference is
+small enough to be tempting: `ForceChangePassword` contributes **1 edge of the
+3,965** (0.02%). So the two figures are 79.42% and 79.44%, and the fifth type
+carries essentially none of the mass. Recorded because the near-identical numbers
+would otherwise let a claim about five types stand on evidence about four —
+convergence in the output of two independent derivations is a property of a
+coarse weight scale, not evidence of a shared cause.
+
 Concentration on one derived weight **removes what a risk-aware planner has to
 trade against**. Where every alternative costs the same, there is no cheaper
 route to find and no ordering to exploit — not because the planner is weak, but
@@ -472,6 +505,99 @@ walkable edges the defender cannot tell apart.
 this graph, that is a fourth manifestation of the same collapse rather than an
 independent result, and will be reported as such. Recorded before the sweep is
 run.
+
+## Results — H2 and H3
+
+Both read off the Shape D section above, which is why they are written together:
+one mechanism answers them in opposite directions.
+
+### H2 — under static risk, the weighted planner is not beaten. It is optimal.
+
+*Registered form: the smarter static planner gives the best tradeoff when risk
+does not change with history.*
+
+**Supported, and more strongly than registered — but the strength is the
+uninteresting kind and should be reported as such.** Weighted A\* does not merely
+give the best observed tradeoff; it returns the exact optimum. This is checked
+mechanically rather than argued: the Tier 1 exact history-aware search, run with
+its history term disabled (`k = 1.0`), returns the same cost as weighted A\* on
+every graph tested, pinned by
+`test_reduces_to_the_static_planner_when_history_is_disabled`.
+
+That is a statement about the problem class, not about tuning. Minimum-cost path
+over non-negative edge weights is solved by A\* with an admissible heuristic, and
+the heuristic here — the cheapest walkable edge times the hop distance to the
+nearest target — is admissible by construction. **H2 could not have failed
+without one of the two being wrong**, so confirming it is a correctness check on
+the implementation rather than evidence about Active Directory.
+
+Reporting it that way matters, because H2 is the hypothesis most easily
+overstated. "Our risk-weighted planner achieved the best risk/hops tradeoff" is
+true and nearly vacuous. The non-vacuous part is what H1 measured and is recorded
+as consequence 2 of the Shape D section: **on this graph there is no tradeoff at
+all.** The hop counts are identical across all three entry points, so the
+weighted planner never pays a hop for quiet and the frontier H2 presumes does not
+exist here.
+
+### H3 — answered negatively, with a mechanism and a boundary
+
+*Registered form: the learning planner meaningfully beats the smarter static one
+only when risk depends on the attacker's own past actions.*
+
+**H3 is answered in the negative on this graph, and the negative is the
+project's central result.** Three independent measurements, none of which
+required tuning:
+
+| Measurement | Result |
+|---|---|
+| Tier 1 exact history-aware search vs. static weighted | **no route changes** on any of the three entry points |
+| Tier 2 Q-learning, 5 seeds × 3 entries | reaches the exact optimum, **+0.00% gap**, 15/15 |
+| `k` sweep, 1.0 → 10.0 | **flat** — no route change at any value |
+
+The registered antecedent is not merely unmet; **it is unmeetable on this
+substrate**, and that is a stronger and more useful finding than a failed
+comparison would have been. History-dependence has nothing to discriminate with
+when 95.3% of walkable edges fall in one category: every alternative route
+repeats the same category, so a repeat penalty rescales them together and
+re-ranks nothing. `TYWIN` shows this cleanly — its cost rises 39.5 → 44.5 under
+the history model while its route does not move, and it still does not move at
+`k = 10.0`, where the cost has reached 264.5.
+
+**The negative is bounded, not universal, and the bound was measured rather than
+argued.** The H5/H6 perturbation registered one change inside the dominant class
+and one outside it. The `GenericAll` ACE, joining the 95.3% majority, changed
+nothing. The `MemberOf` membership, in the 4.0% minority at the floor weight,
+re-ranked `TYWIN` from nine hops to seven. So history-dependence is not inert in
+principle — it is inert *within a collapsed class*, and it recovers exactly where
+the collapse does not reach.
+
+**What H3 does not say.** It does not say adaptive planning is useless in
+Active Directory; one collection cannot support that. It says the conditions
+under which adaptivity can pay are a measurable property of the graph, and this
+graph does not have them. The conditional form and its measurable antecedent are
+in the Shape D section; the reason synthetic evaluation would not have surfaced
+this is contribution (f).
+
+Both results also carry the scope statement below: H3 is tested in a weakened
+form, with history summarised as a set of category bits and no escalation with
+count. A confirmed H3 under that summary would have said less than the registered
+hypothesis implies.
+
+**What a richer summary would have done is a bound, not a measurement, and is
+labelled as one.** Summary B distinguishes *counts* within a category. On a graph
+where 95.3% of walkable edges fall in one category, that gains resolution
+**inside the class that collapsed and none outside it** — it would let the model
+tell a third `WriteDacl` from a second, which is a distinction among edges that
+already price identically, and would add nothing to the minority classes where
+discrimination survives. It could not have created discrimination the substrate
+does not contain.
+
+That is reasoning about what a representation could express, not a result from
+running one. **It is untestable here by a decision already on the record**:
+Summary B was costed at 205 M states and ≈11.8 GB and rejected before any of
+this was measured, so the bound stands on the earlier decision rather than on new
+evidence. Stated this way so it cannot be read as a measured comparison between
+two history summaries, which is not what was done.
 
 ## Differentiation from the Adelaide program
 

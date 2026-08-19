@@ -1,0 +1,1254 @@
+{
+  "description": "H5: degradation of an existing policy under graph change, no retraining. H6: reverse-BFS affected-region bound over the augmented state space.",
+  "experiment": "H5/H6",
+  "generated_by": "tools/run_h5_h6.py",
+  "graph_diff": {
+    "added": [
+      {
+        "category": "acl_abuse",
+        "rel_type": "GenericAll",
+        "source_index": 260,
+        "source_name": "JORAH.MORMONT@ESSOS.LOCAL",
+        "target_index": 381,
+        "target_name": "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL"
+      },
+      {
+        "category": "group_membership",
+        "rel_type": "MemberOf",
+        "source_index": 336,
+        "source_name": "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+        "target_index": 701,
+        "target_name": "KINGSGUARD@SEVENKINGDOMS.LOCAL"
+      }
+    ],
+    "edges_base": 5825,
+    "edges_perturbed": 5827,
+    "nodes_base": 783,
+    "nodes_perturbed": 783,
+    "removed": []
+  },
+  "graphs": {
+    "base": {
+      "path": "data/goad_graph.json",
+      "sha256": "3c1bef97f75df7d224a1e35767cdb3bdf0cb3348b8dd8bbff0d777f924a65ba2"
+    },
+    "perturbed": {
+      "path": "data/goad_graph_perturbed.json",
+      "sha256": "7f80e6dc02ba3aed4896a5f201fbccd447dfe893ba6f16de2dd5b99ab88ed172"
+    }
+  },
+  "planner_config": {
+    "allowed_rel_types": [
+      "AddAllowedToAct",
+      "AddKeyCredentialLink",
+      "AddMember",
+      "AddSelf",
+      "AdminTo",
+      "AllowedToAct",
+      "AllowedToDelegate",
+      "CanPSRemote",
+      "CanRDP",
+      "Contains",
+      "DCSync",
+      "DumpSMSAPassword",
+      "ExecuteDCOM",
+      "ForceChangePassword",
+      "GPLink",
+      "GenericAll",
+      "GenericWrite",
+      "HasSIDHistory",
+      "HasSession",
+      "MemberOf",
+      "Owns",
+      "ReadGMSAPassword",
+      "ReadLAPSPassword",
+      "SQLAdmin",
+      "SpoofSIDHistory",
+      "SyncLAPSPassword",
+      "WriteAccountRestrictions",
+      "WriteDacl",
+      "WriteOwner",
+      "WriteSPN"
+    ],
+    "entry_points": [
+      "SAMWELL.TARLY@NORTH",
+      "SQL_SVC@NORTH",
+      "TYWIN.LANNISTER@SEVENKINGDOMS"
+    ],
+    "max_hops": 20,
+    "target_set": "tier0_targets()",
+    "tie_breaking": "lowest edge index, deterministic",
+    "traversal_view": "with_gpo_expansion()"
+  },
+  "python": "3.12.10",
+  "results": {
+    "h5_rl_no_retraining": {
+      "SAMWELL.TARLY@NORTH": {
+        "optimum_base": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "history",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "optimum_perturbed": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "history",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "seeds": [
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 4.1,
+            "converged": true,
+            "converged_at_episode": 12000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 41430,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 11,
+            "replayed_cost": 4.1,
+            "replayed_hops": 2,
+            "replayed_route": [
+              "WriteOwner",
+              "GPLink"
+            ],
+            "retrained": false,
+            "seed": 0,
+            "success_rate_first_5k": 0.6292,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 4.1,
+            "converged": true,
+            "converged_at_episode": 11000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 41340,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 11,
+            "replayed_cost": 4.1,
+            "replayed_hops": 2,
+            "replayed_route": [
+              "WriteOwner",
+              "GPLink"
+            ],
+            "retrained": false,
+            "seed": 1,
+            "success_rate_first_5k": 0.6222,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 4.1,
+            "converged": true,
+            "converged_at_episode": 12000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 41443,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 11,
+            "replayed_cost": 4.1,
+            "replayed_hops": 2,
+            "replayed_route": [
+              "WriteOwner",
+              "GPLink"
+            ],
+            "retrained": false,
+            "seed": 2,
+            "success_rate_first_5k": 0.6106,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 4.1,
+            "converged": true,
+            "converged_at_episode": 12000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 41453,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 11,
+            "replayed_cost": 4.1,
+            "replayed_hops": 2,
+            "replayed_route": [
+              "WriteOwner",
+              "GPLink"
+            ],
+            "retrained": false,
+            "seed": 3,
+            "success_rate_first_5k": 0.616,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 4.1,
+            "converged": true,
+            "converged_at_episode": 12000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 41324,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 11,
+            "replayed_cost": 4.1,
+            "replayed_hops": 2,
+            "replayed_route": [
+              "WriteOwner",
+              "GPLink"
+            ],
+            "retrained": false,
+            "seed": 4,
+            "success_rate_first_5k": 0.6074,
+            "trained_on": "base"
+          }
+        ]
+      },
+      "SQL_SVC@NORTH": {
+        "optimum_base": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "history",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        },
+        "optimum_perturbed": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "history",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        },
+        "seeds": [
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 15.1,
+            "converged": true,
+            "converged_at_episode": 36000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 20105,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 1076,
+            "replayed_cost": 15.1,
+            "replayed_hops": 4,
+            "replayed_route": [
+              "SQLAdmin",
+              "HasSession",
+              "MemberOf",
+              "GenericWrite"
+            ],
+            "retrained": false,
+            "seed": 0,
+            "success_rate_first_5k": 0.0166,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 15.1,
+            "converged": true,
+            "converged_at_episode": 37000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 20078,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 1092,
+            "replayed_cost": 15.1,
+            "replayed_hops": 4,
+            "replayed_route": [
+              "SQLAdmin",
+              "HasSession",
+              "MemberOf",
+              "GenericWrite"
+            ],
+            "retrained": false,
+            "seed": 1,
+            "success_rate_first_5k": 0.0194,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 15.1,
+            "converged": true,
+            "converged_at_episode": 36000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 20190,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 1104,
+            "replayed_cost": 15.1,
+            "replayed_hops": 4,
+            "replayed_route": [
+              "SQLAdmin",
+              "HasSession",
+              "MemberOf",
+              "GenericWrite"
+            ],
+            "retrained": false,
+            "seed": 2,
+            "success_rate_first_5k": 0.0192,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 15.1,
+            "converged": true,
+            "converged_at_episode": 36000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 20138,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 1100,
+            "replayed_cost": 15.1,
+            "replayed_hops": 4,
+            "replayed_route": [
+              "SQLAdmin",
+              "HasSession",
+              "MemberOf",
+              "GenericWrite"
+            ],
+            "retrained": false,
+            "seed": 3,
+            "success_rate_first_5k": 0.0144,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 15.1,
+            "converged": true,
+            "converged_at_episode": 36000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 20162,
+            "perturbed_gap_vs_new_optimum": 0.0,
+            "q_table_entries": 1074,
+            "replayed_cost": 15.1,
+            "replayed_hops": 4,
+            "replayed_route": [
+              "SQLAdmin",
+              "HasSession",
+              "MemberOf",
+              "GenericWrite"
+            ],
+            "retrained": false,
+            "seed": 4,
+            "success_rate_first_5k": 0.0176,
+            "trained_on": "base"
+          }
+        ]
+      },
+      "TYWIN.LANNISTER@SEVENKINGDOMS": {
+        "optimum_base": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 44.49999999999999,
+          "cost_display": 44.5,
+          "cost_model": "history",
+          "hops": 9,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "SMALL COUNCIL@SEVENKINGDOMS.LOCAL",
+            "DRAGONSTONE@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "AddSelf",
+            "AddMember",
+            "WriteOwner",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 39.5
+        },
+        "optimum_perturbed": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "group_membership",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 29.0,
+          "cost_display": 29.0,
+          "cost_model": "history",
+          "hops": 7,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "MemberOf",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 26.6
+        },
+        "seeds": [
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 44.49999999999999,
+            "converged": true,
+            "converged_at_episode": 22000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 13387,
+            "perturbed_gap_vs_new_optimum": 0.53448276,
+            "q_table_entries": 84,
+            "replayed_cost": 44.49999999999999,
+            "replayed_hops": 9,
+            "replayed_route": [
+              "ForceChangePassword",
+              "GenericWrite",
+              "WriteDacl",
+              "AddSelf",
+              "AddMember",
+              "WriteOwner",
+              "GenericAll",
+              "GenericAll",
+              "DCSync"
+            ],
+            "retrained": false,
+            "seed": 0,
+            "success_rate_first_5k": 0.0,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 44.49999999999999,
+            "converged": true,
+            "converged_at_episode": 27000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 13196,
+            "perturbed_gap_vs_new_optimum": 0.53448276,
+            "q_table_entries": 84,
+            "replayed_cost": 44.49999999999999,
+            "replayed_hops": 9,
+            "replayed_route": [
+              "ForceChangePassword",
+              "GenericWrite",
+              "WriteDacl",
+              "AddSelf",
+              "AddMember",
+              "WriteOwner",
+              "GenericAll",
+              "GenericAll",
+              "DCSync"
+            ],
+            "retrained": false,
+            "seed": 1,
+            "success_rate_first_5k": 0.0002,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 44.49999999999999,
+            "converged": true,
+            "converged_at_episode": 24000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 13430,
+            "perturbed_gap_vs_new_optimum": 0.53448276,
+            "q_table_entries": 84,
+            "replayed_cost": 44.49999999999999,
+            "replayed_hops": 9,
+            "replayed_route": [
+              "ForceChangePassword",
+              "GenericWrite",
+              "WriteDacl",
+              "AddSelf",
+              "AddMember",
+              "WriteOwner",
+              "GenericAll",
+              "GenericAll",
+              "DCSync"
+            ],
+            "retrained": false,
+            "seed": 2,
+            "success_rate_first_5k": 0.0002,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 44.49999999999999,
+            "converged": true,
+            "converged_at_episode": 25000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 13284,
+            "perturbed_gap_vs_new_optimum": 0.53448276,
+            "q_table_entries": 84,
+            "replayed_cost": 44.49999999999999,
+            "replayed_hops": 9,
+            "replayed_route": [
+              "ForceChangePassword",
+              "GenericWrite",
+              "WriteDacl",
+              "AddSelf",
+              "AddMember",
+              "WriteOwner",
+              "GenericAll",
+              "GenericAll",
+              "DCSync"
+            ],
+            "retrained": false,
+            "seed": 3,
+            "success_rate_first_5k": 0.0002,
+            "trained_on": "base"
+          },
+          {
+            "base_gap_vs_optimum": 0.0,
+            "base_policy_cost": 44.49999999999999,
+            "converged": true,
+            "converged_at_episode": 23000,
+            "evaluated_on": "perturbed",
+            "goal_reached_episodes": 13420,
+            "perturbed_gap_vs_new_optimum": 0.53448276,
+            "q_table_entries": 84,
+            "replayed_cost": 44.49999999999999,
+            "replayed_hops": 9,
+            "replayed_route": [
+              "ForceChangePassword",
+              "GenericWrite",
+              "WriteDacl",
+              "AddSelf",
+              "AddMember",
+              "WriteOwner",
+              "GenericAll",
+              "GenericAll",
+              "DCSync"
+            ],
+            "retrained": false,
+            "seed": 4,
+            "success_rate_first_5k": 0.0,
+            "trained_on": "base"
+          }
+        ]
+      }
+    },
+    "h6_affected_region": {
+      "affected_and_reachable": 14,
+      "affected_fraction_of_reachable": 0.00954329,
+      "affected_fraction_of_state_space": 0.05619413,
+      "affected_states": 45056,
+      "categories_in_traversal_set": 10,
+      "category_names": [
+        "acl_abuse",
+        "credential_access",
+        "delegation",
+        "domain_replication",
+        "group_membership",
+        "local_admin",
+        "remote_execution",
+        "session",
+        "structural",
+        "trust"
+      ],
+      "reachable_fraction_of_state_space": 0.00182965,
+      "reachable_states": 1467,
+      "reverse_bfs_seed_nodes": [
+        260,
+        336
+      ],
+      "state_space_size": 801792
+    },
+    "h6_entry_classification": {
+      "SAMWELL.TARLY@NORTH": {
+        "entry_node_index": 389,
+        "observed_route_change": false,
+        "predicted_affected": false,
+        "verdict": "correctly_excluded"
+      },
+      "SQL_SVC@NORTH": {
+        "entry_node_index": 395,
+        "observed_route_change": false,
+        "predicted_affected": false,
+        "verdict": "correctly_excluded"
+      },
+      "TYWIN.LANNISTER@SEVENKINGDOMS": {
+        "entry_node_index": 676,
+        "observed_route_change": true,
+        "predicted_affected": true,
+        "verdict": "correctly_predicted"
+      }
+    },
+    "planners_base": {
+      "SAMWELL.TARLY@NORTH": {
+        "exact_history": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "history",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "shortest_path": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 2.0,
+          "cost_display": 2.0,
+          "cost_model": "unit_cost",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "weighted_astar": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "static",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        }
+      },
+      "SQL_SVC@NORTH": {
+        "exact_history": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "history",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        },
+        "shortest_path": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "local_admin",
+            "domain_replication"
+          ],
+          "cost": 4.0,
+          "cost_display": 4.0,
+          "cost_model": "unit_cost",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "WINTERFELL.NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "AdminTo",
+            "DCSync"
+          ],
+          "static_risk": 20.0
+        },
+        "weighted_astar": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "static",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        }
+      },
+      "TYWIN.LANNISTER@SEVENKINGDOMS": {
+        "exact_history": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 44.49999999999999,
+          "cost_display": 44.5,
+          "cost_model": "history",
+          "hops": 9,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "SMALL COUNCIL@SEVENKINGDOMS.LOCAL",
+            "DRAGONSTONE@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "AddSelf",
+            "AddMember",
+            "WriteOwner",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 39.5
+        },
+        "shortest_path": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 9.0,
+          "cost_display": 9.0,
+          "cost_model": "unit_cost",
+          "hops": 9,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "SMALL COUNCIL@SEVENKINGDOMS.LOCAL",
+            "DRAGONSTONE@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "AddSelf",
+            "AddMember",
+            "WriteOwner",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 39.5
+        },
+        "weighted_astar": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 39.5,
+          "cost_display": 39.5,
+          "cost_model": "static",
+          "hops": 9,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "SMALL COUNCIL@SEVENKINGDOMS.LOCAL",
+            "DRAGONSTONE@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "AddSelf",
+            "AddMember",
+            "WriteOwner",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 39.5
+        }
+      }
+    },
+    "planners_perturbed": {
+      "SAMWELL.TARLY@NORTH": {
+        "exact_history": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "history",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "shortest_path": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 2.0,
+          "cost_display": 2.0,
+          "cost_model": "unit_cost",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        },
+        "weighted_astar": {
+          "categories": [
+            "acl_abuse",
+            "structural"
+          ],
+          "cost": 4.1,
+          "cost_display": 4.1,
+          "cost_model": "static",
+          "hops": 2,
+          "node_names": [
+            "SAMWELL.TARLY@NORTH.SEVENKINGDOMS.LOCAL",
+            "STARKWALLPAPER@NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "WriteOwner",
+            "GPLink"
+          ],
+          "static_risk": 4.1
+        }
+      },
+      "SQL_SVC@NORTH": {
+        "exact_history": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "history",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        },
+        "shortest_path": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "local_admin",
+            "domain_replication"
+          ],
+          "cost": 4.0,
+          "cost_display": 4.0,
+          "cost_model": "unit_cost",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "WINTERFELL.NORTH.SEVENKINGDOMS.LOCAL",
+            "NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "AdminTo",
+            "DCSync"
+          ],
+          "static_risk": 20.0
+        },
+        "weighted_astar": {
+          "categories": [
+            "remote_execution",
+            "session",
+            "group_membership",
+            "acl_abuse"
+          ],
+          "cost": 15.1,
+          "cost_display": 15.1,
+          "cost_model": "static",
+          "hops": 4,
+          "node_names": [
+            "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL",
+            "CASTELBLACK.NORTH.SEVENKINGDOMS.LOCAL",
+            "ROBB.STARK@NORTH.SEVENKINGDOMS.LOCAL",
+            "ADMINISTRATORS@NORTH.SEVENKINGDOMS.LOCAL",
+            "DOMAIN ADMINS@NORTH.SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "SQLAdmin",
+            "HasSession",
+            "MemberOf",
+            "GenericWrite"
+          ],
+          "static_risk": 15.1
+        }
+      },
+      "TYWIN.LANNISTER@SEVENKINGDOMS": {
+        "exact_history": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "group_membership",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 29.0,
+          "cost_display": 29.0,
+          "cost_model": "history",
+          "hops": 7,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "MemberOf",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 26.6
+        },
+        "shortest_path": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "group_membership",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 7.0,
+          "cost_display": 7.0,
+          "cost_model": "unit_cost",
+          "hops": 7,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "MemberOf",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 26.6
+        },
+        "weighted_astar": {
+          "categories": [
+            "credential_access",
+            "acl_abuse",
+            "acl_abuse",
+            "group_membership",
+            "acl_abuse",
+            "acl_abuse",
+            "domain_replication"
+          ],
+          "cost": 26.6,
+          "cost_display": 26.6,
+          "cost_model": "static",
+          "hops": 7,
+          "node_names": [
+            "TYWIN.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JAIME.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "JOFFREY.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "TYRON.LANNISTER@SEVENKINGDOMS.LOCAL",
+            "KINGSGUARD@SEVENKINGDOMS.LOCAL",
+            "STANNIS.BARATHEON@SEVENKINGDOMS.LOCAL",
+            "KINGSLANDING.SEVENKINGDOMS.LOCAL",
+            "SEVENKINGDOMS.LOCAL"
+          ],
+          "route": [
+            "ForceChangePassword",
+            "GenericWrite",
+            "WriteDacl",
+            "MemberOf",
+            "GenericAll",
+            "GenericAll",
+            "DCSync"
+          ],
+          "static_risk": 26.6
+        }
+      }
+    }
+  },
+  "risk_model": {
+    "cost_unit": "unitless loudness per edge, floor..ceiling",
+    "history_summary": "set of technique categories used (one bit each)",
+    "p15_declared_fraction": 0.25,
+    "repeat_multiplier_k": 1.2,
+    "unknown_edge_type_behaviour": "raises; never defaults",
+    "weight_ceiling": 10.0,
+    "weight_floor": 0.1,
+    "weights_sourced": [
+      "AddAllowedToAct",
+      "AddMember",
+      "AddSelf",
+      "AdminTo",
+      "AllowedToAct",
+      "AllowedToDelegate",
+      "Contains",
+      "DCSync",
+      "ForceChangePassword",
+      "GPLink",
+      "GenericAll",
+      "GenericWrite",
+      "GetChanges",
+      "GetChangesAll",
+      "GetChangesInFilteredSet",
+      "HasSession",
+      "MemberOf",
+      "SQLAdmin",
+      "SpoofSIDHistory",
+      "WriteDacl",
+      "WriteOwner"
+    ],
+    "weights_sourced_count": 21,
+    "weights_total": 35,
+    "weights_unsourced": [
+      "AddKeyCredentialLink",
+      "CanPSRemote",
+      "CanRDP",
+      "DumpSMSAPassword",
+      "ExecuteDCOM",
+      "HasSIDHistory",
+      "Owns",
+      "ReadGMSAPassword",
+      "ReadLAPSPassword",
+      "SyncLAPSPassword",
+      "TrustedBy",
+      "WriteAccountRestrictions",
+      "WriteGPLink",
+      "WriteSPN"
+    ],
+    "weights_unsourced_count": 14
+  },
+  "rl_config": {
+    "action_space": "walkable out-edges of the current node",
+    "algorithm": "tabular Q-learning",
+    "alpha": 0.1,
+    "checkpoint_every": 1000,
+    "episodes": 50000,
+    "epsilon_decay_fraction": 0.8,
+    "epsilon_end": 0.05,
+    "epsilon_start": 1.0,
+    "failure_penalty": -100.0,
+    "gamma": 1.0,
+    "max_hops": 20,
+    "retrained_after_perturbation": false,
+    "seed": 0,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "stable_checkpoints_for_convergence": 10,
+    "state": "(node index, category-set bitmask)"
+  }
+}

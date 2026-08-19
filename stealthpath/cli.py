@@ -195,8 +195,6 @@ def cmd_compare(args: argparse.Namespace) -> int:
                   - sum(weight_of(r) for r in plain.rel_types(g)))
         print(f"Routes differ: {d_hops:+d} hops for {d_risk:+.1f} risk.")
 
-    # ASCII only in CLI output: the default Windows console codepage mangles
-    # anything else, and this is the first thing a new person runs.
     missing = unsourced()
     if missing:
         print(f"\n!! {len(missing)} of {len(PROVISIONAL_WEIGHTS)} risk weights "

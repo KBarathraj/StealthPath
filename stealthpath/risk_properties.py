@@ -102,8 +102,6 @@ def route_cost(cost: CostFn, graph: AttackGraph, route: Sequence[int]) -> float:
     return total
 
 
-# -------------------------------------------------------------------- P4
-
 def _subsequence_pairs(graph: AttackGraph) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     """`(shorter, longer)` pairs where `shorter` is an order-preserving
     subsequence of `longer`.
@@ -155,8 +153,6 @@ def check_p4_subsequence_monotonicity(cost: CostFn, graph: AttackGraph) -> None:
                 f"more, in the same order, cannot be quieter."
             )
 
-
-# -------------------------------------------------------------------- P5
 
 def _severity_probe() -> AttackGraph:
     """A minimal graph carrying one of each tier-0 target kind, reached by the
@@ -220,8 +216,6 @@ def check_p5_target_sensitivity(cost: CostFn) -> int:
     return compared
 
 
-# ---------------------------------------------------------------- P6 and P7
-
 def check_p6_static_reduction(static: CostFn, adaptive_history_disabled: CostFn,
                               graph: AttackGraph) -> None:
     """**P6 — exact static reduction.**
@@ -273,8 +267,6 @@ def check_p7_static_ignores_history(static: CostFn, graph: AttackGraph) -> None:
                 )
 
 
-# -------------------------------------------------------------------- P9
-
 def check_p9_strict_positivity(cost: CostFn, graph: AttackGraph) -> None:
     """**P9 — every action carries risk > 0.**
 
@@ -291,8 +283,6 @@ def check_p9_strict_positivity(cost: CostFn, graph: AttackGraph) -> None:
                     f"with history {history}; every action must carry risk > 0."
                 )
 
-
-# -------------------------------------------------------------------- P12
 
 def _relabelled(graph: AttackGraph) -> tuple[AttackGraph, dict[int, int]]:
     """The same graph with node and edge order reversed.
@@ -333,8 +323,6 @@ def check_p12_relabelling_invariance(cost: CostFn, graph: AttackGraph) -> None:
             )
 
 
-# -------------------------------------------------------------------- P13
-
 def check_p13_locality(cost: CostFn, graph: AttackGraph) -> None:
     """**P13 — an unrelated edge elsewhere must not change a route's score.**
 
@@ -361,8 +349,6 @@ def check_p13_locality(cost: CostFn, graph: AttackGraph) -> None:
             )
 
 
-# -------------------------------------------------------------------- P14
-
 def check_p14_determinism(cost: CostFn, graph: AttackGraph, repeats: int = 5) -> None:
     """**P14 — same input, same score, every time.**
 
@@ -379,8 +365,6 @@ def check_p14_determinism(cost: CostFn, graph: AttackGraph, repeats: int = 5) ->
                 )
 
 
-# ------------------------------------------------------------ P1, P2, P15
-#
 # The three that needed the history-dependent model to exist. They are written
 # here in the same form as the other six — a function over a cost function —
 # rather than as tests, so the model can be probed from a scratch script.
@@ -507,8 +491,6 @@ def check_p15_bounded_step(cost: CostFn, graph: AttackGraph, *,
                     f"planner win by avoiding a hand-placed cliff."
                 )
 
-
-# -------------------------------------------------------------------- runner
 
 def check_all(cost: CostFn, graph: AttackGraph, *,
               static: CostFn | None = None,

@@ -84,8 +84,6 @@ def unit_cost(graph: AttackGraph, edge_index: int, path_so_far: Sequence[int]) -
 
 @runtime_checkable
 class Planner(Protocol):
-    """All three planners implement this."""
-
     name: str
 
     def plan(self, graph: AttackGraph, sources: Sequence[int],

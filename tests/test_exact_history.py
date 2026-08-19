@@ -34,8 +34,6 @@ def _endpoints(graph):
     return graph.entry_nodes(), graph.target_nodes()
 
 
-# ------------------------------------------------------- agreement with the model
-
 @pytest.mark.parametrize("seed", SEEDS)
 def test_cost_equals_the_models_own_route_cost(seed):
     """**The check that validates the whole state-keyed design.**
@@ -90,8 +88,6 @@ def test_reduces_to_the_static_planner_when_history_is_disabled(seed):
     assert exact.cost == pytest.approx(static_route.cost)
 
 
-# ------------------------------------------------------------------ mechanics
-
 def test_is_deterministic(goad):
     srcs, tgts = _endpoints(goad)
     cost = history_cost_fn()
@@ -123,8 +119,6 @@ def test_planner_protocol_wrapper_agrees_with_the_function(goad):
     assert direct is not None and viaplanner is not None
     assert direct.edges == viaplanner.edges
 
-
-# ------------------------------------------------------------- the state space
 
 def test_state_space_matches_the_pre_registered_figure():
     """400,896 = 783 x 2^9, and the 9 is a *consequence of build rule 3*."""

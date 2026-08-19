@@ -57,24 +57,20 @@ class EdgeCategory:
 _C = EdgeCategory
 
 EDGE_CATEGORIES: dict[str, str] = {
-    # --- group membership -------------------------------------------------
     # Free to traverse and essentially free to *observe*: membership is a
     # property of the directory, not an action. Expect near-zero detection cost
     # in Stage 3 — this is the main reason A* and Dijkstra may agree.
     "MemberOf": _C.GROUP_MEMBERSHIP,
 
-    # --- local admin / remote execution -----------------------------------
     "AdminTo": _C.LOCAL_ADMIN,
     "CanRDP": _C.REMOTE_EXECUTION,
     "CanPSRemote": _C.REMOTE_EXECUTION,
     "ExecuteDCOM": _C.REMOTE_EXECUTION,
     "SQLAdmin": _C.REMOTE_EXECUTION,
 
-    # --- sessions ---------------------------------------------------------
     # Traversal here means credential theft from a logged-on session.
     "HasSession": _C.SESSION,
 
-    # --- ACL abuse --------------------------------------------------------
     "GenericAll": _C.ACL_ABUSE,
     "GenericWrite": _C.ACL_ABUSE,
     "WriteDacl": _C.ACL_ABUSE,
@@ -87,7 +83,6 @@ EDGE_CATEGORIES: dict[str, str] = {
     "WriteAccountRestrictions": _C.ACL_ABUSE,
     "WriteGPLink": _C.ACL_ABUSE,
 
-    # --- credential access ------------------------------------------------
     "ForceChangePassword": _C.CREDENTIAL_ACCESS,
     "ReadLAPSPassword": _C.CREDENTIAL_ACCESS,
     "SyncLAPSPassword": _C.CREDENTIAL_ACCESS,
@@ -95,25 +90,21 @@ EDGE_CATEGORIES: dict[str, str] = {
     "DumpSMSAPassword": _C.CREDENTIAL_ACCESS,
     "HasSIDHistory": _C.CREDENTIAL_ACCESS,
 
-    # --- delegation -------------------------------------------------------
     "AllowedToDelegate": _C.DELEGATION,
     "AllowedToAct": _C.DELEGATION,
     "AddAllowedToAct": _C.DELEGATION,
 
-    # --- replication ------------------------------------------------------
     "DCSync": _C.DOMAIN_REPLICATION,
     "GetChanges": _C.DOMAIN_REPLICATION,
     "GetChangesAll": _C.DOMAIN_REPLICATION,
     "GetChangesInFilteredSet": _C.DOMAIN_REPLICATION,
 
-    # --- structural / containment ----------------------------------------
     # These are directory structure, not attacker actions. Including them in a
     # path makes the path shorter but not meaningful, unless paired with a
     # GPO-abuse edge. Excluded from DEFAULT_TRAVERSAL_SET on purpose.
     "Contains": _C.STRUCTURAL,
     "GPLink": _C.STRUCTURAL,
 
-    # --- trusts -----------------------------------------------------------
     # `TrustedBy` was retired: current BloodHound does not emit it. SpecterOps
     # replaced the single catch-all with a set that separates the *existence* of
     # a trust from the *abuse* of one — SameForestTrust / CrossForestTrust carry
@@ -134,7 +125,6 @@ EDGE_CATEGORIES: dict[str, str] = {
     # static model cannot express.
     "SpoofSIDHistory": _C.TRUST,
 
-    # --- local groups -----------------------------------------------------
     # BloodHound CE's local-admin model: Principal -MemberOfLocalGroup->
     # LocalGroup -LocalToComputer-> Computer. Where the local group is
     # Administrators, that chain is semantically `AdminTo`.
@@ -308,14 +298,13 @@ def category_of(rel_type: str) -> str:
         ) from None
 
 
-# ---------------------------------------------------------------------------
 # STAGE 2 WORKSHEET — Cyber Track fills this in, with a citation per row.
 #
 # The weights themselves now live in `risk.py`, which is also where the verified
 # `technique=` and `source=` fields belong once you have confirmed them. This
 # table stays as the candidate-hint worksheet: it is where the guessing happens,
 # risk.py is where the answers land.
-# ---------------------------------------------------------------------------
+#
 # Every weight needs to trace to an ATT&CK technique ID, a specific Sigma rule,
 # or a named detection writeup. Candidate techniques are noted below as
 # *starting points for verification only* — several BloodHound edges map to more

@@ -100,7 +100,6 @@ def main() -> None:
     s.append('<text x="40" y="42" font-size="17" font-weight="bold" fill="{}">'
              'One mechanism, five consequences, one boundary</text>'.format(INK))
 
-    # --- mechanism band: cause first, consequence second ---
     s.append('<rect x="40" y="60" width="{}" height="82" rx="4" fill="{}"/>'
              .format(W - 80, INK))
     s.append('<text x="62" y="88" font-size="13.5" fill="#ffffff" font-weight="bold">'

@@ -92,12 +92,10 @@ def goad_like() -> AttackGraph:
     g = AttackGraph()
     SK, NORTH, ESSOS = "SEVENKINGDOMS.LOCAL", "NORTH.SEVENKINGDOMS.LOCAL", "ESSOS.LOCAL"
 
-    # --- domains -----------------------------------------------------------
     _n(g, "S-1-5-21-SK", SK, "Domain", SK)
     _n(g, "S-1-5-21-NORTH", NORTH, "Domain", NORTH)
     _n(g, "S-1-5-21-ESSOS", ESSOS, "Domain", ESSOS)
 
-    # --- computers ---------------------------------------------------------
     _n(g, "C-KINGSLANDING", f"KINGSLANDING.{SK}", "Computer", SK,
        high_value=True, operatingsystem="Windows Server 2019", is_dc=True)
     _n(g, "C-WINTERFELL", f"WINTERFELL.{NORTH}", "Computer", NORTH,
@@ -109,7 +107,6 @@ def goad_like() -> AttackGraph:
     _n(g, "C-BRAAVOS", f"BRAAVOS.{ESSOS}", "Computer", ESSOS,
        operatingsystem="Windows Server 2016")
 
-    # --- groups ------------------------------------------------------------
     _n(g, "G-DA-SK", f"DOMAIN ADMINS@{SK}", "Group", SK, high_value=True, admincount=True)
     _n(g, "G-DA-NORTH", f"DOMAIN ADMINS@{NORTH}", "Group", NORTH, high_value=True, admincount=True)
     _n(g, "G-EA-SK", f"ENTERPRISE ADMINS@{SK}", "Group", SK, high_value=True, admincount=True)
@@ -118,7 +115,6 @@ def goad_like() -> AttackGraph:
     _n(g, "G-SUPPORT", f"HELPDESK@{NORTH}", "Group", NORTH)
     _n(g, "G-DRAGONS", f"DRAGONS@{ESSOS}", "Group", ESSOS)
 
-    # --- users -------------------------------------------------------------
     _n(g, "U-SAMWELL", f"SAMWELL.TARLY@{NORTH}", "User", NORTH,
        owned=True, enabled=True)                     # <- the foothold
     _n(g, "U-JON", f"JON.SNOW@{NORTH}", "User", NORTH, enabled=True, hasspn=True)
@@ -132,7 +128,7 @@ def goad_like() -> AttackGraph:
 
     E = g.add_edge
 
-    # --- route A: quiet. membership -> helpdesk -> LAPS -> admin -> DCSync --
+    # route A: quiet. membership -> helpdesk -> LAPS -> admin -> DCSync
     E("U-SAMWELL", "G-NIGHTWATCH", "MemberOf")
     E("G-NIGHTWATCH", "G-SUPPORT", "MemberOf")
     E("G-SUPPORT", "C-CASTELBLACK", "ReadLAPSPassword")
@@ -142,23 +138,22 @@ def goad_like() -> AttackGraph:
     E("U-SVC-BACKUP", "S-1-5-21-NORTH", "DCSync")
     E("S-1-5-21-NORTH", "G-DA-NORTH", "Contains")
 
-    # --- route B: short but loud -------------------------------------------
+    # route B: short but loud
     E("U-SAMWELL", "C-CASTELBLACK", "CanRDP")
     E("C-CASTELBLACK", "U-JON", "HasSession")
     E("U-JON", "G-STARK", "MemberOf")
     E("G-STARK", "U-EDDARD", "GenericAll")
     E("U-EDDARD", "G-DA-NORTH", "MemberOf")
 
-    # --- route C: ACL chain, medium ----------------------------------------
+    # route C: ACL chain, medium
     E("U-SAMWELL", "U-ARYA", "ForceChangePassword")
     E("U-ARYA", "G-STARK", "AddMember")
     E("U-ARYA", "U-JON", "AddKeyCredentialLink")
 
-    # --- delegation shortcut -----------------------------------------------
+    # delegation shortcut
     E("C-CASTELBLACK", "C-WINTERFELL", "AllowedToDelegate")
     E("C-WINTERFELL", "G-DA-NORTH", "AdminTo")
 
-    # --- trusts -------------------------------------------------------------
     # Domain -> Domain, matching what BloodHound actually emits. The previous
     # `G-DA-NORTH -TrustedBy-> SEVENKINGDOMS` edge was wrong twice over: the
     # type was retired from BloodHound's model, and a trust runs between domains
@@ -169,7 +164,6 @@ def goad_like() -> AttackGraph:
     E("S-1-5-21-SK", "S-1-5-21-ESSOS", "CrossForestTrust")    # separate forest
     E("S-1-5-21-ESSOS", "S-1-5-21-SK", "CrossForestTrust")
 
-    # --- cross-domain -------------------------------------------------------
     E("S-1-5-21-SK", "G-EA-SK", "Contains")
     E("G-DA-NORTH", "G-DA-SK", "MemberOf")
     E("U-ROBERT", "G-DA-SK", "MemberOf")
@@ -185,7 +179,7 @@ def goad_like() -> AttackGraph:
     E("U-JORAH", "C-BRAAVOS", "Owns")
     E("G-DRAGONS", "U-JORAH", "WriteDacl")
 
-    # --- dead end -----------------------------------------------------------
+    # dead end
     E("U-SAMWELL", "U-STANNIS", "GenericWrite")
 
     return g
@@ -328,7 +322,6 @@ def random_ad(
             if parent != grp:
                 g.add_edge(grp, parent, "MemberOf")
 
-    # access / execution
     for c in computers:
         for grp in rng.sample(groups[1:], rng.randint(0, 2)):
             g.add_edge(grp, c, rng.choice(["AdminTo", "CanRDP", "CanPSRemote"]))
@@ -353,7 +346,6 @@ def random_ad(
         if rng.random() < 0.03:
             g.add_edge(grp, "G-DA", "MemberOf")
 
-    # ACL abuse
     acl = ["GenericAll", "GenericWrite", "WriteDacl", "WriteOwner", "Owns",
            "ForceChangePassword", "AddMember", "AddKeyCredentialLink"]
     for _ in range(int(0.4 * (n_users + n_groups))):
@@ -362,7 +354,6 @@ def random_ad(
         if src != dst:
             g.add_edge(src, dst, rng.choice(acl))
 
-    # delegation + replication
     for c in rng.sample(computers, max(1, n_computers // 8)):
         g.add_edge(c, rng.choice(computers), "AllowedToDelegate")
     for u in rng.sample(users, max(1, n_users // 25)):

@@ -39,8 +39,6 @@ def graphs():
     return AttackGraph.load(BASE_GRAPH), AttackGraph.load(PERTURBED_GRAPH)
 
 
-# ------------------------------------------------------------------ provenance
-
 def test_graph_hashes_match_the_cited_values():
     """Every H5/H6 figure is cited against these two hashes. If they move, the
     results describe a different substrate and must be regenerated."""
@@ -69,8 +67,6 @@ def test_the_perturbation_is_exactly_two_added_edges(graphs):
     assert by_rel["MemberOf"]["category"] == "group_membership"
 
 
-# ------------------------------------------------------------------ H5 planners
-
 def test_tywin_loses_two_hops_and_the_others_do_not_move(graphs):
     """The headline H5 route change: 9h/39.5 -> 7h/26.6 on TYWIN only."""
     base, pert = graphs
@@ -92,8 +88,6 @@ def test_tywin_loses_two_hops_and_the_others_do_not_move(graphs):
             assert (before[entry][planner]["route"]
                     == after[entry][planner]["route"]), entry
 
-
-# ------------------------------------------------------------------- H6 region
 
 def test_affected_region_counts_and_that_seeds_are_derived(graphs):
     """H6: 45,056 affected of 801,792, 1,467 reachable, 14 in both.
@@ -135,8 +129,6 @@ def test_the_bound_classifies_all_three_entry_points_correctly(graphs):
     assert cls["SQL_SVC@NORTH"]["verdict"] == "correctly_excluded"
     assert all(v["verdict"] != "OUTSIDE_BOUND_FALSIFIED" for v in cls.values())
 
-
-# --------------------------------------------------- the committed artifact
 
 @pytest.fixture(scope="module")
 def artifact():

@@ -156,7 +156,6 @@ class Neo4jLoader:
         self._database = database
         self._page_size = page_size
 
-    # ------------------------------------------------------------------ ctx
     def __enter__(self) -> "Neo4jLoader":
         return self
 
@@ -166,7 +165,6 @@ class Neo4jLoader:
     def close(self) -> None:
         self._driver.close()
 
-    # ----------------------------------------------------------------- fetch
     def _paged(self, query: str) -> Iterator[dict[str, Any]]:
         skip = 0
         with self._driver.session(database=self._database) as session:

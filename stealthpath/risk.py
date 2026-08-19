@@ -164,12 +164,9 @@ def _w(weight: float, rationale: str) -> RiskWeight:
     return RiskWeight(weight=weight, rationale=rationale)
 
 
-# ---------------------------------------------------------------------------
 # PROVISIONAL. Every `source` below is None. That is not an oversight.
-# ---------------------------------------------------------------------------
 
 PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
-    # --- no action taken --------------------------------------------------
     "MemberOf": RiskWeight(
         weight=0.1,
         channels=(NATIVE_NONE_FOUND, ENDPOINT_NONE_FOUND),
@@ -212,7 +209,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "TrustedBy": _w(1.0, "Crossing a trust is authentication, not exploitation, "
                          "though cross-domain auth stands out more than local."),
 
-    # --- looks like normal administration ---------------------------------
+    # looks like normal administration
     "AdminTo": RiskWeight(
         weight=2.5,
         channels=(NATIVE_DEFAULT, ENDPOINT_NONE_FOUND),
@@ -296,7 +293,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "ExecuteDCOM": _w(5.5, "Rare in normal operations and specifically hunted "
                            "for; low volume makes it easy to alert on."),
 
-    # --- directory modification -------------------------------------------
+    # directory modification
     # These write to AD, so they land in directory-service auditing *if* it is
     # switched on. That conditional is doing a lot of work and is exactly the
     # kind of assumption the sourcing pass needs to pin down.
@@ -372,7 +369,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
             "was found; recorded as a negative result."
         ),
     ),
-    # --- Shape D: ACL writes -----------------------------------------------
+    # Shape D: ACL writes
     # SOURCED, and re-derived once. The first derivation used only the native-AD
     # half of the baseline: 5136 / 4670 both need a SACL, the baseline grants
     # SACLs on tier-zero objects only, therefore an ACL write on an ordinary
@@ -522,7 +519,6 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
     "WriteGPLink": _w(6.0, "Linking a GPO affects every object under the OU. "
                            "High impact, and GPO changes are usually watched."),
 
-    # --- credential access -------------------------------------------------
     "ReadLAPSPassword": _w(2.5, "A directory attribute read. Quiet unless LAPS "
                                 "read auditing is deliberately configured, "
                                 "which it often isn't."),
@@ -614,7 +610,6 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
 
-    # --- delegation --------------------------------------------------------
     # SOURCED. All three share one detection — 4769 with a non-blank Transited
     # Services field, which is what an S4U2Proxy request looks like. Verified:
     # RBCD and classic constrained delegation populate that field *identically*,
@@ -714,7 +709,6 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
 
-    # --- trusts ------------------------------------------------------------
     # SOURCED. Priced at its own undiscounted marginal cost — the forging and
     # use of the ticket, not the krbtgt compromise that precedes it.
     "SpoofSIDHistory": RiskWeight(
@@ -747,7 +741,7 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
 
-    # --- policy propagation -------------------------------------------------
+    # policy propagation
     # SOURCED. Not attacker actions: the action is writing the GPO, priced on
     # the ACL edge onto it. These two are Group Policy applying, which the OS
     # does by itself. Weighted only so the GPO expansion view can be costed.
@@ -796,7 +790,6 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
         ),
     ),
 
-    # --- replication -------------------------------------------------------
     # The loudest category. If a shop has one AD detection, it is this one.
     # The three components below are priced as ONE UNIT with the composite
     # above. They sat at 8.0 while `DCSync` was 9.0 and stayed there when it
@@ -991,9 +984,7 @@ def static_cost_fn(table: dict[str, RiskWeight] = PROVISIONAL_WEIGHTS
     return cost
 
 
-# ---------------------------------------------------------------------------
 # Stage 3: the history-dependent model
-# ---------------------------------------------------------------------------
 
 REPEAT_MULTIPLIER = 1.2
 """`k` in the proportional repeat step. **A declared parameter, not a derived one.**

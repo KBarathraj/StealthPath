@@ -116,6 +116,9 @@ Each of these is load-bearing. Reversing one is a real decision, not a cleanup.
   so the evaluation code doesn't turn into three special cases.
 - **Determinism throughout.** Seeded RNG, deterministic tie-breaking. Two runs
   on the same input must give the same answer or comparisons mean nothing.
+- **ASCII only in console output.** CLI, tools and figure scripts alike. The
+  default Windows console codepage mangles anything else, and `cli compare` is
+  the first thing a new person runs.
 
 ## Next
 

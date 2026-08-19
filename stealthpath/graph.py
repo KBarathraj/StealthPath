@@ -107,8 +107,6 @@ class AttackGraph:
             self._out[e.source].append(ei)
             self._in[e.target].append(ei)
 
-    # ------------------------------------------------------------------ build
-
     def add_node(self, node: Node) -> int:
         """Add a node, or return the existing index if `node.id` is already known."""
         existing = self._index_of.get(node.id)
@@ -131,8 +129,6 @@ class AttackGraph:
         self._out[s].append(ei)
         self._in[t].append(ei)
         return ei
-
-    # ------------------------------------------------------------------ query
 
     def index_of(self, object_id: str) -> int:
         try:
@@ -277,8 +273,6 @@ class AttackGraph:
         for n in self.nodes:
             counts[n.kind] = counts.get(n.kind, 0) + 1
         return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
-
-    # ------------------------------------------------------------------ views
 
     def filtered(self, rel_types: Iterable[str]) -> "AttackGraph":
         """A copy keeping only the given relationship types, all nodes retained.
@@ -430,8 +424,6 @@ class AttackGraph:
             g.add_edge(e.source, e.target, key=e.rel_type, rel_type=e.rel_type, **e.props)
         return g
 
-    # ------------------------------------------------------------- (de)serial
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "format": "stealthpath.attackgraph/1",
@@ -466,8 +458,6 @@ class AttackGraph:
     @classmethod
     def load(cls, path: str | Path) -> "AttackGraph":
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
-
-    # ------------------------------------------------------------------ dunder
 
     def __len__(self) -> int:
         return len(self.nodes)

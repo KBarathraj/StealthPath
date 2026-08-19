@@ -79,8 +79,6 @@ def test_the_two_counts_are_different_quantities():
         "dropped types are not in the weight table at all")
 
 
-# --------------------------------------------------- the docs must agree
-
 def test_docs_quote_the_derived_figures():
     """Prose is checked against the sources, so a quoted number is guaranteed."""
     n_dropped = len(dropped_edge_types())
@@ -107,8 +105,7 @@ def test_superseded_figures_are_not_reintroduced():
             assert stale not in text, f"{path.name} still says {stale!r}"
 
 
-# ---------------------------------------------- widened sweep, 2026-08-10
-#
+# Widened sweep, 2026-08-10.
 # A deliberate sweep of every figure appearing in live claim text found the
 # 80.4% misuse had survived in `abstract.md` — the document that matters most —
 # and was caught by accident during unrelated work. Everything derivable is

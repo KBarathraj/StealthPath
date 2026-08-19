@@ -39,8 +39,6 @@ def goad():
     return goad_like()
 
 
-# ------------------------------------------- the current model satisfies them
-
 def test_static_model_satisfies_every_applicable_property(goad):
     ran = check_all(static_cost_fn(), goad, static=static_cost_fn())
     assert len(ran) == 9
@@ -65,8 +63,6 @@ def test_static_model_is_its_own_static_reduction(goad):
     vacuously passing."""
     check_p6_static_reduction(static_cost_fn(), static_cost_fn(), goad)
 
-
-# ------------------------------------------------- each property actually bites
 
 def test_p4_catches_a_model_where_doing_more_is_cheaper(goad):
     """The failure P4 exists for: a model where padding a route with extra
@@ -179,8 +175,6 @@ def test_p14_catches_nondeterminism(goad):
         check_p14_determinism(jittery, goad)
 
 
-# ----------------------------------------- the history-dependent model (Stage 3)
-
 BOUND, OBSERVED = max_repeat_step()
 
 
@@ -227,8 +221,6 @@ def test_the_declared_bound_is_not_the_observed_step():
     assert BOUND > OBSERVED
     assert OBSERVED == pytest.approx(6.5 * (REPEAT_MULTIPLIER - 1.0))
 
-
-# ------------------------------------------ P1, P2, P15 each actually bite
 
 def test_p1_catches_a_model_where_history_makes_things_cheaper(goad):
     """A "familiarity discount" — the attacker gets quieter the more they do.
@@ -281,9 +273,6 @@ def test_p15_accepts_the_declared_multiplier(goad):
     """The chosen k must actually clear its own bound — otherwise the bound was
     picked to fit the model rather than the model to fit the bound."""
     check_p15_bounded_step(history_cost_fn(), goad, max_step=BOUND)
-
-
-# ------------------------------------------------------------------ pending
 
 
 @pytest.mark.skip(reason="P3/P4/P8/P10/P11 need a P_detect route scorer — Stage 3")

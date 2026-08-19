@@ -36,8 +36,6 @@ def test_snapshot_matches_current_values():
         "route costs moved — regenerate the snapshot and review the diff")
 
 
-# --------------------------------------------------------- inventory guard
-
 INVENTORY = ROOT / "tests" / "test_inventory.json"
 
 

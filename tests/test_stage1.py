@@ -19,14 +19,10 @@ from stealthpath.planners.shortest_path import ShortestPathPlanner, dijkstra
 from stealthpath.synthetic import goad_like, random_ad
 
 
-# ------------------------------------------------------------------ fixtures
-
 @pytest.fixture
 def goad():
     return goad_like()
 
-
-# --------------------------------------------------------------- graph tests
 
 def test_graph_builds_with_expected_shape(goad):
     assert len(goad.nodes) > 15
@@ -104,8 +100,6 @@ def test_filtered_view_drops_edges_not_nodes(goad):
     assert all(e.rel_type == "MemberOf" for e in only_member.edges)
 
 
-# -------------------------------------------------------------- schema tests
-
 def test_every_fixture_edge_is_categorised(goad):
     for rel in goad.edge_type_counts():
         assert category_of(rel)
@@ -123,7 +117,6 @@ def test_unknown_relationship_fails_loudly():
         category_of("TotallyMadeUpEdge")
 
 
-# -------------------------------------------------------------- loader tests
 # Only the pure helpers — no database, per the no-lab-required rule. These are
 # the parts that differ between BloodHound generations, so they're the ones that
 # would silently produce an empty target list after a whole lab build.
@@ -233,8 +226,6 @@ def test_owned_detected_under_both_bloodhound_generations():
     assert _is_owned({"user_tags": ["owned"]})
     assert not _is_owned({})
 
-
-# ------------------------------------------------------------- planner tests
 
 def test_finds_a_path_to_domain_admins(goad):
     planner = ShortestPathPlanner()
@@ -373,8 +364,6 @@ def test_malformed_path_is_caught():
     with pytest.raises(ValueError, match="malformed"):
         Path((0, 1), (), 0.0).validate(g)
 
-
-# ------------------------------------------------------- synthetic generator
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 7, 42])
 def test_random_graphs_are_solvable(seed):

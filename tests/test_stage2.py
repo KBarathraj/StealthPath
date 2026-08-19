@@ -26,8 +26,6 @@ from stealthpath.risk import (
 from stealthpath.synthetic import goad_like, random_ad
 
 
-# ------------------------------------------------------------------ fixtures
-
 @pytest.fixture
 def goad():
     return goad_like()
@@ -45,8 +43,6 @@ def tier0(goad):
     """The real default target set: DA groups plus domain objects."""
     return goad.tier0_targets()
 
-
-# ---------------------------------------------------------------- weight table
 
 def test_every_traversable_edge_has_a_weight():
     """A new edge type in ad_schema must not be walkable until it is weighted.
@@ -129,8 +125,6 @@ def test_require_sourced_passes_once_sources_exist():
     assert unsourced(sourced) == []
 
 
-# ------------------------------------------------------------- cost function
-
 def test_static_cost_ignores_history(goad):
     """That is what makes it static. Stage 3's version has the same signature
     and does read the history, so the planners never have to change."""
@@ -145,8 +139,6 @@ def test_cost_matches_the_table(goad):
         if edge.rel_type in TRAVERSABLE_EDGES:
             assert cost(goad, ei, ()) == PROVISIONAL_WEIGHTS[edge.rel_type].weight
 
-
-# ----------------------------------------------------------------- heuristic
 
 def test_hops_to_targets_is_a_real_hop_count(goad, da_north):
     dist = hops_to_targets(goad, da_north, TRAVERSABLE_EDGES)
@@ -482,8 +474,6 @@ def test_domain_object_is_a_target_not_a_containment_shortcut(goad, tier0):
     assert "Contains" not in path.rel_types(goad)
     assert not (set(path.rel_types(goad)) & STRUCTURAL_EDGES)
 
-
-# ------------------------------------------------------------------- planner
 
 def test_finds_a_path_to_domain_admins(goad, da_north):
     path = WeightedAStarPlanner().plan(goad, goad.entry_nodes(), da_north)

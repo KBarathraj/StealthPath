@@ -26,8 +26,6 @@ def goad():
     return goad_like()
 
 
-# ------------------------------------------------------------------ regressions
-
 def _dead_end_graph() -> tuple[AttackGraph, dict[str, RiskWeight]]:
     """Source with two choices: a cheap dead end, or a dearer route to a target.
 
@@ -103,8 +101,6 @@ def test_greedy_extraction_ignores_actions_it_never_tried():
     assert walked is not None, "greedy chose an action it had never tried"
     assert walked.rel_types(graph) == ["WriteOwner", "GenericWrite"]
 
-
-# ---------------------------------------------------- agreement with the optimum
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_never_beats_the_exact_optimum(goad, seed):

@@ -33,8 +33,6 @@ from stealthpath.risk import (
 SOURCED = {r: w for r, w in PROVISIONAL_WEIGHTS.items() if w.sourced}
 
 
-# --------------------------------------------------- structural completeness
-
 def test_sourced_weight_accounts_for_both_baseline_halves():
     """**The invariant written in response to the 1.5 error.**
 
@@ -59,8 +57,6 @@ def test_sourced_weight_has_both_a_rationale_and_a_citation():
         assert w.rationale.strip(), rel
         assert w.source and w.source.strip(), rel
 
-
-# ------------------------------------------------- ordering that must hold
 
 def test_a_sacl_only_weight_declares_a_tier_conditional():
     """If the only native channel needs a SACL, then on a non-tier-zero target
@@ -146,8 +142,6 @@ def test_every_walkable_edge_is_priced():
     is the worst place to discover it."""
     assert set(DEFAULT_TRAVERSAL_SET) <= set(PROVISIONAL_WEIGHTS)
 
-
-# ------------------------------------------------------------- the gate
 
 def test_require_sourced_still_blocks_a_mixed_table():
     """The dangerous state is *partial* sourcing, where a reported number mixes

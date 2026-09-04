@@ -14,6 +14,55 @@ Re-check anything marked as sensitive to weights once the sourcing pass lands.
 
 ---
 
+## 2026-09-04 — history rewrite, and the round trip verified for the first time
+
+**Graphs:** `3c1bef97…` and `7f80e6dc…`, both unchanged — and re-hashed from a
+**fresh clone of the remote** rather than from the working tree, which is the
+whole point of this entry.
+
+Branch `h5h6-perturbed-graph` had author and committer normalised to
+`KBarathraj <barathrajkannan2006@gmail.com>` and 15 `Co-Authored-By` trailers
+stripped. Content did not move: all 28 tree hashes are identical before and
+after, `git diff` across the rewrite is empty, and author and committer
+timestamps match to the second, timezone offsets included.
+
+**Two corrections to the record.**
+
+1. The branch is **28 commits, not 13**.
+2. It had **already been pushed** to `origin/h5h6-perturbed-graph` at `151e54b`,
+   so the rewrite required a force-push rather than a first push. The
+   pre-rewrite commits stay reachable on the remote by hash, so the stripped
+   trailers are not retracted from GitHub — only from the branch history.
+
+**One new result, not a correction: the round trip had never been run.** The
+`b427ef8a…` → `3c1bef97…` supersession was made to fix exactly this — `save()`
+wrote platform-default line endings and `core.autocrlf` meant the blob git
+stored could differ from the file on disk — but the fix had only ever been
+checked in place. Clone-and-rehash closes that:
+
+| Check, from `git clone` on Windows | Result |
+|---|---|
+| `sha256 data/goad_graph.json` | `3c1bef97f75df7d2…` — matches |
+| `sha256 data/goad_graph_perturbed.json` | `7f80e6dc02ba3aed…` — matches |
+| `git hash-object` vs `rev-parse HEAD:<path>`, all 5 chain files | identical |
+| `pytest -q` | **194 passed, 2 skipped** |
+
+The five files in the hash-citation chain are the two graph artifacts plus
+`data/collection_provenance.json`, `results/h5_h6.json` and
+`tests/test_h5_h6_runner.py`. Only the first two have their *own* hash cited;
+the other three cite or pin. Worth stating because "five hash-cited artifacts"
+is the natural miscount.
+
+**ESORICS citation checked, and it was correct — recorded because
+checked-and-clean must read differently from never-considered.** Goel et al.,
+*Optimizing Cyber Defense in Dynamic Active Directories through Reinforcement
+Learning*, verified against arXiv:2406.19596: title verbatim and the author
+order (Goel, Moore, Guo, Wang, Kim, Camtepe) both match `abstract.md` and
+`stage0_related_work.md`. No change made. Same convention as `NONE_FOUND` in
+`channels`.
+
+---
+
 ## 2026-08-09 — **H1 fails**, and it fails in shape rather than magnitude
 
 **Graph:** `3c1bef97…`, expansion view. No new computation — this is a tabulation

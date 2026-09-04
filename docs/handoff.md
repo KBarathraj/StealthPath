@@ -36,6 +36,10 @@ drifted, and one of them ended up claiming Stage 3 had not started while the
 other correctly reported most of its properties implemented. The Stage 3 exit
 criteria are in the same file, immediately below Status.
 
+**That file is local and deliberately untracked** — gitignored, absent from a
+clone by design. If you are reading this from a fresh clone you do not have it;
+ask for it rather than reconstructing its content here.
+
 The short version, for orientation only: Stages 1-4 done, Stage 5's experiments
 done with the write-ups outstanding, Stage 7 (dashboard) proposed and awaiting a
 decision.
@@ -313,5 +317,9 @@ mis-parses an examiner's upload live demonstrates the opposite.
 | `docs/stage1_lab_runbook.md` | lab build, target-set policy |
 | `docs/stage0_*.md` | **parked** — research phase, after Stage 5 |
 
-`CLAUDE.md` is gitignored, so it is **not in the repo** — a fresh clone gets none
-of the build rules. Worth fixing if a second person joins.
+`CLAUDE.md` is gitignored, so it is **not in the repo** — a fresh clone gets
+neither the build rules nor the Status block. **This is deliberate and stays
+that way (2026-09-04):** it is a local working file. Do not "fix" it by copying
+its content into the tracked docs — duplicating the Status block is precisely
+what caused the Stage 3 drift this file warns about above. Hand the file over
+directly instead.

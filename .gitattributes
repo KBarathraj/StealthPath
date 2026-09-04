@@ -26,3 +26,9 @@ tests/*.json -text
 results/**/*.json -text
 results/**/*.svg  -text
 results/**/*.png  binary
+
+# Added 2026-09-04. Not a live risk — no doc is cited by hash — but this is the
+# same mechanism as the b427ef8a supersession showing up in an uncovered path,
+# and committing docs/findings.md warned "LF will be replaced by CRLF". One line
+# closes it before a doc ever becomes load-bearing.
+docs/*.md text=auto eol=lf

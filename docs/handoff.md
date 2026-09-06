@@ -112,8 +112,14 @@ committed artifacts. What remains is writing, plus one scoping decision.
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in
-  `tests/test_inventory.json` (111 vs 123 when that gap was last measured), and
-  running pytest inside pytest to obtain it is not acceptable. The sweep found
+  `tests/test_inventory.json` (194 functions vs 236 collected, 2026-09-06), and
+  running pytest inside pytest to obtain it is not acceptable.
+
+  **The two numbers have collided at 194.** The inventory's `total` is now 194,
+  which is also the collected count as of the previous commit — so grepping the
+  docs for `194` hits both, and they mean different things. The live claim is
+  always the *collected* count; the inventory total is generated, is never
+  quoted in prose, and is not what these four files record. The sweep found
   all four stale, plus two stale claims in `README.md` (32 unsourced weights,
   and the learner described as PPO when it is tabular Q-learning). **Update
   these four by hand whenever the suite count changes.**

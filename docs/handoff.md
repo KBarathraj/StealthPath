@@ -1,6 +1,6 @@
 # Handoff
 
-**As of 2026-08-19.** `194 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
+**As of 2026-09-06.** `236 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
 
 Read `CLAUDE.md` first for the build rules, then this. To find your way around
 the code without reading it all, use the graph index — see "Finding your way
@@ -108,7 +108,7 @@ committed artifacts. What remains is writing, plus one scoping decision.
   figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
   weights, and the H5/H6 artifact values.
 
-  **Hand-maintained, and it is the pytest counts.** `194 passed, 2 skipped`
+  **Hand-maintained, and it is the pytest counts.** `236 passed, 2 skipped`
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in

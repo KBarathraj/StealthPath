@@ -14,6 +14,57 @@ Re-check anything marked as sensitive to weights once the sourcing pass lands.
 
 ---
 
+## 2026-09-06 — correction: `TYWIN`'s first-5k figure is 0.0% on two seeds, not five
+
+Found while timing training for the Stage 7 live-run decision, not while
+re-reading the claim. **findings.md:348 says "not one of the first 5,000 episodes
+reached a target."** That holds for **seeds 0 and 4**. Seeds 1, 2 and 3 each
+reached a target **exactly once** inside the first 5,000.
+
+The artifact already recorded this and the prose did not follow it:
+
+| seed | `success_rate_first_5k` | goals in first 5k | first target at episode |
+|---|---|---|---|
+| 0 | 0.0 | 0 | 9,033 |
+| 1 | **0.0002** | **1** | 4,206 |
+| 2 | **0.0002** | **1** | 1,735 |
+| 3 | **0.0002** | **1** | 946 |
+| 4 | 0.0 | 0 | 6,410 |
+
+**The table's "0.0%" is fair rounding — 0.02% displays as 0.0% at one decimal —
+and it stands. The sentence beneath it does not.** Recorded rather than silently
+reworded, because this is the fourth instance of the same class in this project:
+a correct number carried into a sentence that claims slightly more than it.
+
+**Nothing downstream moves.** The guard's threshold is 1%; 0.02% trips it just as
+0.0% does, so `TYWIN` still trips on all five seeds, the remedy is still "none
+applied", and the recovery narrative is unchanged. What changes is only how
+absolutely the zero may be stated.
+
+**The recovery is gradual, and worth having measured.** Goals per 5,000-episode
+window, seed 0:
+
+| episodes | goals | rate |
+|---|---|---|
+| 0–5,000 | 0 | 0.00% |
+| 5,000–10,000 | 1 | 0.02% |
+| 10,000–15,000 | 14 | 0.28% |
+| 15,000–20,000 | 122 | 2.44% |
+| 20,000–25,000 | 305 | 6.10% |
+| 25,000–30,000 | 711 | 14.22% |
+| 30,000–35,000 | 1,494 | 29.88% |
+| 35,000–40,000 | 2,902 | 58.04% |
+| 40,000–45,000 | 3,874 | 77.48% |
+| 45,000–50,000 | 3,964 | 79.28% |
+
+Across seeds the first 1,000-episode window above 1% success is **13,000–16,000**,
+and convergence follows at 22,000–27,000 — so **the greedy route stabilises while
+the exploration success rate is still only ~6%**. The policy is right long before
+the random walk that trained it looks healthy, which is the substantive reason
+the guard fired on a run that needed no rescuing.
+
+---
+
 ## 2026-09-04 — history rewrite, and the round trip verified for the first time
 
 **Graphs:** `3c1bef97…` and `7f80e6dc…`, both unchanged — and re-hashed from a

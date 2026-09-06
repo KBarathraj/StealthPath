@@ -239,3 +239,73 @@ def test_modal_class_membership_is_five_types_but_four_share_the_signature():
     assert sum(counts[t] for t in modal) == 3965
     assert round(sum(counts[t] for t in shape_d) / n * 100, 2) == 79.42
     assert round(sum(counts[t] for t in modal) / n * 100, 2) == 79.44
+
+
+# Figures 4-6, added 2026-09-06. Rendered by `tools/figure_rl_trajectory.py`
+# through `dashboard.figures`, the same code path the dashboard draws with, so
+# the paper's figure and the demo's panel cannot diverge. Training three entry
+# points at 50,000 episodes costs ~2.6s, which is the price of pinning a figure
+# whose content is a learned trajectory rather than a tabulation.
+RL_FIGURES = {
+    #  entry:                        (optimum, first target ep, converged ep)
+    "SAMWELL.TARLY@NORTH": (4.1, 3, 12_000),
+    "SQL_SVC@NORTH": (15.1, 37, 36_000),
+    "TYWIN.LANNISTER@SEVENKINGDOMS": (44.5, 9_033, 22_000),
+}
+
+
+def test_the_rl_trajectory_figures_quote_the_reported_result():
+    """Seed 0 at the pre-registered 50,000 episodes, +0.00% on all three.
+
+    These are the numbers printed on Figures 4-6. Pinning them here means a
+    figure cannot silently start disagreeing with the Tier 2 result it
+    illustrates — the failure mode that put `80.4%` into `abstract.md`.
+    """
+    import pytest
+
+    from dashboard.rl_view import training_run
+    from stealthpath.graph import AttackGraph
+
+    graph = AttackGraph.load(GRAPH)
+    for entry, (optimum, first_target, converged) in RL_FIGURES.items():
+        run = training_run(graph, entry, 0)
+        assert run["reference"]["cost"] == pytest.approx(optimum), entry
+        assert run["final_cost"] == pytest.approx(optimum), entry
+        assert run["gap_vs_optimum"] == 0.0, entry
+        assert run["first_target_episode"] == first_target, entry
+        assert run["converged_at_episode"] == converged, entry
+        assert len(run["trajectory"]) == 50, entry
+
+
+def test_only_sql_svc_shows_a_descent_the_other_two_are_optimal_immediately():
+    """Two of the three trajectories are flat; describing all three as
+    "converging toward" the optimum would be wrong.
+
+    On `SAMWELL` and `TYWIN` the first route the greedy policy can extract is
+    already exact, and everything before it is the policy having no route at all
+    — so what takes 22,000 episodes on `TYWIN` is *stability*, not improvement.
+    `SQL_SVC` is the exception and genuinely descends, through five distinct
+    costs, reaching the optimum at episode 8,000 rather than at its first route.
+
+    That split is not incidental: `SQL_SVC` is also the entry with the largest
+    Q-table (1,076 against 11 and 84) and the only one where the plain and
+    weighted planners disagree. It is the one entry with enough alternative
+    routes for there to be anything to learn.
+    """
+    import pytest
+
+    from dashboard.rl_view import training_run
+    from stealthpath.graph import AttackGraph
+
+    graph = AttackGraph.load(GRAPH)
+    seen = {}
+    for entry, (optimum, _, _) in RL_FIGURES.items():
+        run = training_run(graph, entry, 0)
+        found = [p for p in run["trajectory"] if p["cost"] is not None]
+        assert found, entry
+        assert found[-1]["cost"] == pytest.approx(optimum), entry
+        seen[entry] = sorted({round(p["cost"], 4) for p in found})
+
+    assert seen["SAMWELL.TARLY@NORTH"] == [4.1]
+    assert seen["TYWIN.LANNISTER@SEVENKINGDOMS"] == [44.5]
+    assert seen["SQL_SVC@NORTH"] == [15.1, 15.22, 15.6, 20.14, 29.72]

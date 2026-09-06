@@ -154,3 +154,43 @@ def test_planner_protocol_wrapper_returns_a_valid_path(goad):
         pytest.skip("no route learned in the fast config")
     path.validate(goad)
     assert path.planner == "q-learning"
+
+
+def test_the_observer_cannot_change_the_run(goad):
+    """`on_checkpoint` observes; it must not perturb a single byte of the result.
+
+    The reason this is a test rather than a comment: `results/h5_h6.json` is
+    cited by sha256 in `docs/findings.md`, so anything that could shift the RNG
+    or the update order would silently invalidate a hash the write-up quotes.
+    An observer that reads state is safe by inspection, but "safe by inspection"
+    is what the two silent bugs above also looked like.
+    """
+    src = goad.find(name="SOURCE")[0] if goad.find(name="SOURCE") else 0
+    targets = goad.tier0_targets()
+    cost = history_cost_fn()
+
+    seen: list[tuple[int, float | None]] = []
+    quiet = train(goad, src, targets, cost, FAST)
+    loud = train(goad, src, targets, cost, FAST,
+                 on_checkpoint=lambda ep, c: seen.append((ep, c)))
+
+    assert quiet.checkpoints == loud.checkpoints
+    assert quiet.q == loud.q
+    assert quiet.q_size == loud.q_size
+    assert quiet.converged_at_episode == loud.converged_at_episode
+    assert quiet.goal_reached_total == loud.goal_reached_total
+    assert quiet.success_rate_first_5k == loud.success_rate_first_5k
+    assert (quiet.path is None) == (loud.path is None)
+    if quiet.path is not None:
+        assert (quiet.path.edges, quiet.path.cost) == (loud.path.edges, loud.path.cost)
+
+    # The observer saw exactly the recorded checkpoints, in order, and nothing else.
+    assert seen == quiet.checkpoints
+
+
+def test_the_observer_is_optional_and_defaults_to_off(goad):
+    """Absent `on_checkpoint`, train() behaves as it did before the hook existed."""
+    src = goad.find(name="SOURCE")[0] if goad.find(name="SOURCE") else 0
+    r = train(goad, src, goad.tier0_targets(), history_cost_fn(), FAST)
+    assert len(r.checkpoints) == FAST.episodes // FAST.checkpoint_every
+    assert all(isinstance(ep, int) for ep, _ in r.checkpoints)

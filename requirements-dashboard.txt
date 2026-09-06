@@ -1,0 +1,25 @@
+# Stage 7 dashboard only. Deliberately NOT in requirements.txt.
+#
+#     pip install -r requirements.txt -r requirements-dashboard.txt
+#     streamlit run dashboard/app.py
+#
+# The dashboard is a demo; the test suite is the evidence chain. A reviewer must
+# be able to run `pytest -q` on a bare checkout without installing a web
+# framework, so this file is separate and `dashboard/app.py` imports streamlit
+# inside the function that needs it rather than at module scope.
+# `tests/test_dashboard_optional_dependency.py` enforces both properties.
+#
+# A separate requirements file rather than a pyproject `[project.optional-dependencies]`
+# extra: this project has no `[project]` table at all — pyproject.toml carries
+# pytest configuration only, and dependencies live in requirements.txt. Adding
+# packaging metadata just to express one optional dependency would change how the
+# project installs, which the pytest `pythonpath` comment is explicit about
+# avoiding ("a lab machine mid-collection is not the place to debug packaging").
+#
+# Pinned exactly, like every other number in this project. Bump it deliberately
+# and re-run the suite, both with and without this file installed.
+streamlit==1.63.0
+
+# matplotlib is NOT repeated here. It is already a core dependency
+# (requirements.txt, used by tools/figure_*.py), and the dashboard renders the
+# same Figures 4-6 through the same code path in dashboard/figures.py.

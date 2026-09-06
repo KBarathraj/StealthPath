@@ -84,6 +84,14 @@ class QLearningResult:
     goal_reached_total: int
     checkpoints: list[tuple[int, float | None]]
     q_size: int
+    first_target_episode: int | None = None
+    """Episode of the first target-reaching episode, or None if never reached.
+
+    Reported because it is the shape of the TYWIN exploration finding: the guard
+    fires on `success_rate_first_5k`, but *when* the first target is reached is
+    what says whether a run was recovering or stuck. Tracked here rather than
+    reconstructed by a caller, because reconstructing it from outside means
+    wrapping the cost function and filtering out `greedy_path`'s own calls."""
     q: dict[tuple[int, int, int], float] | None = None
     """The learned table, kept so a policy can be evaluated on a *changed* graph
     without retraining. That is the H5 measurement: degradation of an existing
@@ -108,8 +116,20 @@ def train(graph: AttackGraph,
           targets: Sequence[int],
           cost: CostFn,
           cfg: QLearningConfig = QLearningConfig(),
-          allowed_rel_types: Iterable[str] | None = None) -> QLearningResult:
-    """Learn a policy from `source`, then report it against the exact optimum."""
+          allowed_rel_types: Iterable[str] | None = None,
+          on_checkpoint: Callable[[int, float | None], None] | None = None,
+          ) -> QLearningResult:
+    """Learn a policy from `source`, then report it against the exact optimum.
+
+    `on_checkpoint(episode, best_cost)` is an **observer**, called with the same
+    pair already appended to `checkpoints`. It exists so a caller can watch a run
+    without waiting for it to end; it is passed no mutable state, its return
+    value is discarded, and it is called after the checkpoint is recorded, so it
+    cannot influence convergence. Critically it touches nothing the RNG sees, so
+    a run with an observer must produce byte-identical output to one without —
+    `test_the_observer_cannot_change_the_run` proves that rather than assuming
+    it, because a frozen artifact is cited by hash.
+    """
     allowed = set(DEFAULT_TRAVERSAL_SET if allowed_rel_types is None
                   else allowed_rel_types)
     target_set = set(targets)
@@ -139,6 +159,7 @@ def train(graph: AttackGraph,
 
     goal_reached = 0
     first_5k_success = 0
+    first_target_episode: int | None = None
     checkpoints: list[tuple[int, float | None]] = []
     stable = 0
     last_route: tuple[int, ...] | None = None
@@ -193,6 +214,8 @@ def train(graph: AttackGraph,
 
         if reached:
             goal_reached += 1
+            if first_target_episode is None:
+                first_target_episode = ep
             if ep < 5_000:
                 first_5k_success += 1
         else:
@@ -211,6 +234,8 @@ def train(graph: AttackGraph,
                                actions, cfg.max_hops)
             route = path.edges if path else None
             checkpoints.append((ep + 1, path.cost if path else None))
+            if on_checkpoint is not None:
+                on_checkpoint(*checkpoints[-1])
             if route is not None and route == last_route:
                 stable += 1
                 if (stable >= cfg.stable_checkpoints_for_convergence
@@ -229,6 +254,7 @@ def train(graph: AttackGraph,
         episodes_run=cfg.episodes,
         success_rate_first_5k=first_5k_success / min(5_000, cfg.episodes),
         goal_reached_total=goal_reached,
+        first_target_episode=first_target_episode,
         checkpoints=checkpoints,
         q_size=len(q),
         q=q,

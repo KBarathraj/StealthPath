@@ -341,3 +341,44 @@ def test_only_sql_svc_moves_and_it_does_not_move_monotonically():
     assert max(costs[first_opt:]) > optimum, (
         "the policy is expected to leave the optimum after first reaching it")
     assert round(max(costs[first_opt:]), 2) == 29.72
+
+
+def test_figure_3_route_comparison_is_the_h1_result():
+    """Figure 3's four numbers, and the two claims its caption makes.
+
+    `SQL_SVC` plain `20.00` against weighted `15.10` at an identical four hops,
+    gap `4.90` — handoff.md's Figure 3 brief and the H1 row of findings.md. The
+    caption asserts two things beyond the numbers: that the routes share a
+    prefix and diverge at hop 3, and that the edge avoided is `DCSync`.
+
+    The second is pinned because the first render got it wrong. It captioned
+    `AdminTo` — the first *divergent* hop — where the finding is about the
+    loudest edge *dropped*. Both are one-line derivations off the same two
+    routes and they disagree, so the one the caption makes is the one that
+    needs a test.
+    """
+    from dashboard.compute import compare_entry_point, route_static_risk_per_hop
+    from stealthpath.graph import AttackGraph
+
+    comparison = compare_entry_point(AttackGraph.load(GRAPH), "SQL_SVC@NORTH")
+    plain, weighted = comparison["shortest_path"], comparison["weighted_astar"]
+
+    assert plain["route"] == ["SQLAdmin", "HasSession", "AdminTo", "DCSync"]
+    assert weighted["route"] == ["SQLAdmin", "HasSession", "MemberOf", "GenericWrite"]
+    assert plain["hops"] == weighted["hops"] == 4
+    assert (plain["static_risk"], weighted["static_risk"]) == (20.0, 15.1)
+    assert round(plain["static_risk"] - weighted["static_risk"], 2) == 4.90
+
+    assert route_static_risk_per_hop(plain["route"]) == [5.0, 6.0, 2.5, 6.5]
+    assert route_static_risk_per_hop(weighted["route"]) == [5.0, 6.0, 0.1, 4.0]
+
+    a, b = plain["route"], weighted["route"]
+    split = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
+    assert split == 2, "the caption says the routes diverge at hop 3"
+
+    dropped = [(w, r) for r, w in zip(a, route_static_risk_per_hop(a))
+               if r not in set(b)]
+    assert max(dropped)[1] == "DCSync", "the caption names the loudest dropped edge"
+    assert a[split] == "AdminTo", (
+        "AdminTo is the first divergent hop and is NOT what the caption should "
+        "name; this line exists so the two stay distinguishable")

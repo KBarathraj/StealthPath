@@ -49,7 +49,7 @@ from tools.run_h5_h6 import ENTRY_POINTS, MAX_HOPS, _path_record
 
 __all__ = [
     "graph_profile", "coverage", "structural_absences",
-    "compare_entry_point", "qlearning_result",
+    "compare_entry_point", "qlearning_result", "route_static_risk_per_hop",
     "ENTRY_POINTS", "MAX_HOPS", "ADCS_NODE_KINDS", "RESULTS_PATH",
 ]
 
@@ -264,6 +264,18 @@ def structural_absences(graph: AttackGraph) -> dict[str, Any]:
         "session_edges": by_category.get("session", 0),
         "delegation_edges": by_category.get("delegation", 0),
     }
+
+
+def route_static_risk_per_hop(route: Sequence[str]) -> list[float]:
+    """Static weight of each hop, in order, via `risk.weight_of`.
+
+    Split out rather than added to `_path_record` on purpose: that record shape
+    is shared with `tools/run_h5_h6.py` and reproduces the committed artifact
+    byte for byte, so adding a field there would change `results/h5_h6.json` and
+    break a hash the paper cites. Figure 3 needs the per-hop breakdown to show
+    how 20.00 and 15.10 are reached; it gets it here instead.
+    """
+    return [weight_of(r) for r in route]
 
 
 def compare_entry_point(graph: AttackGraph, entry: str) -> dict[str, Any]:

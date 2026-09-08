@@ -130,3 +130,87 @@ def save_figure(fig: Figure, stem: Path | str, dpi: int = 400) -> list[Path]:
     svg = stem.with_suffix(".svg")
     svg.write_bytes(svg.read_bytes().replace(b"\r\n", b"\n"))
     return written
+
+
+def route_comparison_figure(comparison: dict[str, Any], entry: str,
+                            *, title: str | None = None) -> Figure:
+    """Plot two planners' routes from one entry point side by side.
+
+    Takes a `compute.compare_entry_point()` result. Like the trajectory figure
+    this computes nothing: the routes, per-hop weights and totals all arrive
+    already derived, so the figure cannot disagree with `findings.md` about a
+    number it did not calculate.
+
+    The design decision that matters is the **shared prefix**. Both routes open
+    `SQLAdmin -> HasSession` and only diverge at hop 3, which is the whole point
+    of the comparison — the weighted planner is not finding a longer way around,
+    it is making a different choice at one node. Drawing the common hops in the
+    muted colour and the divergence in full ink makes that readable in one look;
+    two independently coloured tracks would not.
+    """
+    routes = [("shortest path", comparison["shortest_path"], MODAL),
+              ("risk-weighted", comparison["weighted_astar"], REFERENCE)]
+
+    # Where the two routes stop agreeing. Derived, not hard-coded, so the figure
+    # stays correct if the graph or the weights move.
+    a, b = routes[0][1]["route"], routes[1][1]["route"]
+    split = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.2))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    n_hops = max(len(a), len(b))
+    for row, (label, rec, colour) in enumerate(routes):
+        y = 1 - row
+        rels = rec["route"]
+        ax.plot([0, n_hops], [y, y], color=MUTED, linewidth=1.0, zorder=1)
+        for i, rel in enumerate(rels):
+            shared = i < split
+            c = MUTED if shared else colour
+            ax.plot([i, i + 1], [y, y], color=c,
+                    linewidth=3.2 if not shared else 2.0, zorder=2,
+                    solid_capstyle="round")
+            ax.annotate("", xy=(i + 1, y), xytext=(i + 0.72, y), zorder=3,
+                        arrowprops=dict(arrowstyle="-|>", color=c, linewidth=0))
+            weight = rec["static_risk_per_hop"][i]
+            ax.text(i + 0.5, y + 0.085, rel, ha="center", va="bottom",
+                    fontsize=8.5, color=INK if not shared else "#777777",
+                    fontweight="bold" if not shared else "normal")
+            ax.text(i + 0.5, y - 0.10, f"{weight:g}", ha="center", va="top",
+                    fontsize=8, color=c if not shared else "#999999")
+        ax.text(-0.12, y, label, ha="right", va="center", fontsize=9.5,
+                color=INK, fontweight="bold")
+        ax.text(n_hops + 0.12, y,
+                f"{rec['hops']} hops\n{rec['static_risk']:.2f}",
+                ha="left", va="center", fontsize=9, color=colour,
+                fontweight="bold", linespacing=1.4)
+
+    # The divergence, called out once rather than left to the colour change.
+    ax.axvline(split, color=INK, linestyle=(0, (2, 3)), linewidth=1.0, zorder=0)
+    ax.text(split, 1.42, f"routes diverge at hop {split + 1}", ha="center",
+            va="bottom", fontsize=8.5, color=INK)
+
+    gap = routes[0][1]["static_risk"] - routes[1][1]["static_risk"]
+    # The edge worth naming is the loudest one the weighted route drops, not the
+    # first one it changes. Those differ here: divergence starts at `AdminTo`
+    # (2.5) but the finding is that `DCSync` (6.5) is avoided, and taking the
+    # first divergent hop instead of the dearest dropped one captioned this
+    # figure wrongly on its first render.
+    dropped = [(w, r) for r, w in zip(a, routes[0][1]["static_risk_per_hop"])
+               if r not in set(b)]
+    avoided = max(dropped)[1] if dropped else None
+    ax.text(0.5, -0.62,
+            f"identical hop count · {avoided} avoided · static-risk gap {gap:.2f}",
+            transform=ax.get_yaxis_transform(), ha="center", va="center",
+            fontsize=9.5, color=INK,
+            bbox=dict(boxstyle="round,pad=0.55", facecolor="#fbfbfb",
+                      edgecolor="#cccccc", linewidth=0.8))
+
+    ax.set_xlim(-1.55, n_hops + 1.15)
+    ax.set_ylim(-0.95, 1.75)
+    ax.axis("off")
+    ax.set_title(title or f"{entry} — same length, different price",
+                 fontsize=11, color=INK)
+    fig.tight_layout()
+    return fig

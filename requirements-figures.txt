@@ -1,0 +1,10 @@
+# Optional. Only needed to rasterise Figure 2 to PNG for templates that cannot
+# place vector art. The SVG is the source and is generated without these.
+#
+# The route is svglib -> PDF -> PyMuPDF rather than a direct SVG rasteriser:
+# PyMuPDF alone renders Figure 2's hatched boundary rows as solid black, and
+# reportlab's own renderPM needs a native Cairo backend that has no Windows
+# wheel. Pinned because a raster's bytes depend on the renderer version.
+svglib==2.2.0
+reportlab==5.0.1
+pymupdf==1.28.2

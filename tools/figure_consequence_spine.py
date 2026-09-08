@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import sys
 from collections import Counter
+import math
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -64,6 +65,66 @@ def derive() -> dict:
     }
 
 
+
+def _hatch(x0: float, y0: float, w: float, h: float,
+           spacing: float = 7.0, colour: str = "#e4e4e4",
+           width: float = 1.7) -> list:
+    """Diagonal 45-degree rules filling a rectangle, as plain <line> elements.
+
+    Replaces `<pattern patternTransform="rotate(45)">`. The family is x + y = c;
+    perpendicular spacing `spacing` means stepping c by spacing * sqrt(2). Each
+    line is clipped to the rectangle analytically rather than with <clipPath>,
+    because a converter that drops <pattern> may well drop <clipPath> too.
+    """
+    x1, y1 = x0 + w, y0 + h
+    step = spacing * math.sqrt(2)
+    out = []
+    c = x0 + y0
+    while c <= x1 + y1:
+        ax = max(x0, c - y1)
+        bx = min(x1, c - y0)
+        if bx > ax:
+            out.append('<line x1="{:.2f}" y1="{:.2f}" x2="{:.2f}" y2="{:.2f}" '
+                       'stroke="{}" stroke-width="{}"/>'
+                       .format(ax, c - ax, bx, c - bx, colour, width))
+        c += step
+    return out
+
+
+
+def _write_png(svg_path: Path, dpi: int = 300) -> Path | None:
+    """Rasterise the SVG for templates that cannot place vector art.
+
+    SVG is the source; the PNG is derived from it and never edited. The route is
+    svglib -> PDF -> PyMuPDF, chosen because PyMuPDF alone renders this file's
+    boundary rows as solid black. Optional on purpose: the figure's own
+    correctness does not depend on the raster, so a missing converter prints a
+    note rather than failing the build.
+    """
+    try:
+        import pymupdf
+        from reportlab.graphics import renderPDF
+        from svglib.svglib import svg2rlg
+    except ImportError:
+        print("  (PNG skipped: pip install -r requirements-figures.txt)")
+        return None
+
+    import tempfile
+    drawing = svg2rlg(str(svg_path))
+    png = svg_path.with_suffix(".png")
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf = Path(tmp) / "fig.pdf"
+        renderPDF.drawToFile(drawing, str(pdf))
+        # Closed explicitly: PyMuPDF keeps the file handle open, and on Windows
+        # the TemporaryDirectory cleanup then fails with a sharing violation.
+        doc = pymupdf.open(pdf)
+        try:
+            doc[0].get_pixmap(dpi=dpi).save(png)
+        finally:
+            doc.close()
+    return png
+
+
 def main() -> None:
     d = derive()
 
@@ -92,10 +153,17 @@ def main() -> None:
     s.append('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {} {}" '
              'width="{}" height="{}" font-family="{}">'.format(W, H, W, H, SERIF))
     s.append('<rect width="{}" height="{}" fill="#ffffff"/>'.format(W, H))
-    s.append('<defs><pattern id="bnd" width="7" height="7" '
-             'patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
-             '<line x1="0" y1="0" x2="0" y2="7" stroke="#e4e4e4" '
-             'stroke-width="1.7"/></pattern></defs>')
+    # Hatching is drawn as explicit lines rather than as an SVG <pattern>.
+    #
+    # The pattern version rendered correctly in browsers and was silently
+    # dropped by every SVG-to-PNG converter tried: PyMuPDF filled the boundary
+    # rows solid black, making their text unreadable, and svglib filled them
+    # white, losing the hatch while keeping the caption's claim that it is
+    # there. Since the footnote states that hatching is one of the two
+    # redundant encodings that survive black-and-white printing, a raster export
+    # without it contradicts the figure's own accessibility argument.
+    #
+    # Primitives every renderer supports keep the SVG and the PNG identical.
 
     s.append('<text x="40" y="42" font-size="17" font-weight="bold" fill="{}">'
              'One mechanism, five consequences, one boundary</text>'.format(INK))
@@ -129,8 +197,7 @@ def main() -> None:
                  'stroke="{}" stroke-width="1"/>'
                  .format(y, W - 80, PANEL_MAJ if majority else PANEL_BND, LINE))
         if not majority:
-            s.append('<rect x="40" y="{}" width="{}" height="72" rx="3" '
-                     'fill="url(#bnd)"/>'.format(y, W - 80))
+            s.extend(_hatch(40, y, W - 80, 72))
 
         if majority:
             s.append('<rect x="54" y="{}" width="17" height="17" fill="{}"/>'
@@ -164,6 +231,9 @@ def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(s) + "\n", encoding="utf-8", newline="\n")
     print("wrote {}".format(OUT.relative_to(ROOT)))
+    png = _write_png(OUT)
+    if png is not None:
+        print("wrote {}".format(png.relative_to(ROOT)))
     print("  derived: modal {:.1f}%, TYWIN {:g}->{:g}, {}h->{}h, threshold {:g}"
           .format(d["modal_pct"], d["tywin_static"], d["tywin_history"],
                   d["hops_before"], d["hops_after"], d["acl_weight"]))

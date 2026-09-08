@@ -185,7 +185,7 @@ tie-breaking isn't ours, and a different path of the same length is fine.
 | Shortest-path (Dijkstra) baseline | Done: `planners/shortest_path.py` |
 | Milestone check vs. BloodHound | Done: `cli path --verify` |
 
-Run `pytest` now, before the lab exists — `236 passed, 2 skipped` against the
+Run `pytest` now, before the lab exists — `237 passed, 2 skipped` against the
 synthetic fixture. That means when the real graph lands, any failure is about
 *your data*, not the code, which makes debugging enormously faster.
 

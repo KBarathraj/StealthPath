@@ -277,15 +277,33 @@ def test_the_rl_trajectory_figures_quote_the_reported_result():
         assert len(run["trajectory"]) == 50, entry
 
 
-def test_only_sql_svc_shows_a_descent_the_other_two_are_optimal_immediately():
+def test_only_sql_svc_moves_and_it_does_not_move_monotonically():
     """Two of the three trajectories are flat; describing all three as
     "converging toward" the optimum would be wrong.
 
     On `SAMWELL` and `TYWIN` the first route the greedy policy can extract is
     already exact, and everything before it is the policy having no route at all
     — so what takes 22,000 episodes on `TYWIN` is *stability*, not improvement.
-    `SQL_SVC` is the exception and genuinely descends, through five distinct
-    costs, reaching the optimum at episode 8,000 rather than at its first route.
+
+    `SQL_SVC` is the exception: it moves, through five distinct costs. **It does
+    not descend.** An earlier version of this docstring said it "genuinely
+    descends", which was wrong, and the assertion below could not catch it
+    because it compared a *sorted set* of costs and so discarded the order the
+    claim was about. The actual shape, seed 0:
+
+        ep  5,000   20.14
+        ep  8,000   15.10   <- optimum reached here
+        ep 10,000   15.60   <- and left again
+        ep 11,000   15.22
+        ep 12,000   15.10
+        ep 16,000   29.72   <- 97% above optimum, worse than its first route
+        ep 18,000   15.22
+        ep 19,000   15.10   <- settles
+
+    A greedy extraction from a partially converged Q-table has no reason to
+    improve monotonically: the argmax can move to a state-action pair whose
+    value is still badly estimated. Saying that plainly is stronger than
+    implying a smooth curve, and the excursion at 16,000 is the evidence.
 
     That split is not incidental: `SQL_SVC` is also the entry with the largest
     Q-table (1,076 against 11 and 84) and the only one where the plain and
@@ -309,3 +327,17 @@ def test_only_sql_svc_shows_a_descent_the_other_two_are_optimal_immediately():
     assert seen["SAMWELL.TARLY@NORTH"] == [4.1]
     assert seen["TYWIN.LANNISTER@SEVENKINGDOMS"] == [44.5]
     assert seen["SQL_SVC@NORTH"] == [15.1, 15.22, 15.6, 20.14, 29.72]
+
+    # Order, not just the value set. The set assertion above cannot distinguish
+    # a descent from an excursion, which is how the "genuinely descends" wording
+    # survived in the docstring. Pin the shape the prose actually claims.
+    run = training_run(graph, "SQL_SVC@NORTH", 0)
+    costs = [p["cost"] for p in run["trajectory"] if p["cost"] is not None]
+    assert not all(a >= b for a, b in zip(costs, costs[1:])), (
+        "SQL_SVC's trajectory is non-monotonic; if it ever becomes a clean "
+        "descent the docstring above is what needs rewriting, not this line")
+    optimum = min(costs)
+    first_opt = costs.index(optimum)
+    assert max(costs[first_opt:]) > optimum, (
+        "the policy is expected to leave the optimum after first reaching it")
+    assert round(max(costs[first_opt:]), 2) == 29.72

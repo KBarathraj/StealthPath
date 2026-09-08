@@ -72,7 +72,7 @@
       "test_h5_h6_figures_come_from_the_artifact",
       "test_k_is_the_declared_value",
       "test_modal_class_membership_is_five_types_but_four_share_the_signature",
-      "test_only_sql_svc_shows_a_descent_the_other_two_are_optimal_immediately",
+      "test_only_sql_svc_moves_and_it_does_not_move_monotonically",
       "test_superseded_figures_are_not_reintroduced",
       "test_the_narrative_provenance_file_only_points_at_the_record",
       "test_the_rl_trajectory_figures_quote_the_reported_result",

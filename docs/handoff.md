@@ -1,6 +1,6 @@
 # Handoff
 
-**As of 2026-09-08.** `237 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
+**As of 2026-09-08.** `247 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
 
 Read `CLAUDE.md` first for the build rules, then this. To find your way around
 the code without reading it all, use the graph index — see "Finding your way
@@ -108,11 +108,11 @@ committed artifacts. What remains is writing, plus one scoping decision.
   figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
   weights, and the H5/H6 artifact values.
 
-  **Hand-maintained, and it is the pytest counts.** `237 passed, 2 skipped`
+  **Hand-maintained, and it is the pytest counts.** `247 passed, 2 skipped`
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in
-  `tests/test_inventory.json` (195 functions vs 237 collected, 2026-09-08), and
+  `tests/test_inventory.json` (205 functions vs 247 collected, 2026-09-08), and
   running pytest inside pytest to obtain it is not acceptable.
 
   **The two numbers have collided at 194.** The inventory's `total` is now 194,

@@ -32,3 +32,7 @@ results/**/*.png  binary
 # and committing docs/findings.md warned "LF will be replaced by CRLF". One line
 # closes it before a doc ever becomes load-bearing.
 docs/*.md text=auto eol=lf
+
+# Vendored collector exports. Binary, and the sha256 of each is recorded in
+# data/collection_provenance.json: line-ending translation would break them.
+data/**/*.zip binary

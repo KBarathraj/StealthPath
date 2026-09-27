@@ -37,6 +37,13 @@ def base():
 
 @pytest.fixture(scope="module")
 def perturbed():
+
+# Skips rather than fails when the artifact is absent. It is gitignored as of
+# 2026-09-27 — kept on disk, out of the repo, because it backs the parked
+# write-up rather than the running app. A fresh clone therefore reports these
+# as skipped, which is visible in pytest's summary; a silent pass would not be.
+    if not PERTURBED.exists():
+        pytest.skip(f"{PERTURBED.name} is not present (gitignored research artifact)")
     return AttackGraph.load(PERTURBED)
 
 
@@ -410,3 +417,38 @@ def test_qlearning_result_refuses_unknown_inputs_rather_than_defaulting():
         C.qlearning_result("live", "SAMWELL.TARLY@NORTH")
     with pytest.raises(KeyError, match="no stored Q-learning result"):
         C.qlearning_result("base", "ADMINISTRATOR@NORTH")
+
+
+def test_pricing_verdict_is_poor_on_the_reference_collection(base):
+    """21/35 sourced and 19 types dropped — the honesty panel must say POOR."""
+    v = C.pricing_verdict(base)
+    assert v["verdict"] == "POOR"
+    assert round(v["walkable_sourced_share"] * 100, 1) == 84.2
+    assert v["dropped_types"] == 19
+
+
+def test_routing_verdict_is_poor_on_tywin_and_good_on_sql_svc(base):
+    """Detection-aware help is per start, not a graph slogan."""
+    assert C.routing_verdict(base, "TYWIN.LANNISTER@SEVENKINGDOMS")["verdict"] == "POOR"
+    assert C.routing_verdict(base, "SQL_SVC@NORTH")["verdict"] == "GOOD"
+    assert C.routing_verdict(base, "SAMWELL.TARLY@NORTH")["verdict"] == "POOR"
+
+
+def test_a_domain_target_is_the_domain_object_not_every_upn_in_that_domain(base):
+    """Reach=NORTH.SEVENKINGDOMS.LOCAL used to 0-hop because the UPN contains it."""
+    view = base.with_gpo_expansion()
+    hits = C.resolve_targets(view, "NORTH.SEVENKINGDOMS.LOCAL")
+    assert [view.nodes[i].name for i in hits] == ["NORTH.SEVENKINGDOMS.LOCAL"]
+    rec = C.compare_entry_point(
+        base, "SQL_SVC@NORTH.SEVENKINGDOMS.LOCAL", "NORTH.SEVENKINGDOMS.LOCAL",
+    )["shortest_path"]
+    assert rec is not None
+    assert rec["hops"] >= 1
+    assert rec["node_names"][0] != rec["node_names"][-1]
+
+
+def test_provenance_uses_the_selected_target(base):
+    default = C.provenance_triple(base, "SAMWELL.TARLY@NORTH")
+    restricted = C.provenance_triple(base, "SAMWELL.TARLY@NORTH", "ESSOS.LOCAL")
+    assert default[0] is not None and default[0]["hops"] == 2
+    assert restricted == (None, None, None)

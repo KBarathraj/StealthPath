@@ -35,7 +35,7 @@ from stealthpath.planners.exact_history import exact_history_search
 from stealthpath.planners.q_learning import QLearningConfig, train
 from stealthpath.risk import history_cost_fn
 
-from .compute import ENTRY_POINTS, MAX_HOPS, RESULTS_PATH
+from .compute import ENTRY_POINTS, MAX_HOPS, RESULTS_PATH, resolve_sources, resolve_targets
 
 __all__ = [
     "STORED", "LIVE", "TrainingBudget", "BudgetExceeded",
@@ -94,12 +94,13 @@ class TrainingBudget:
         return requested > self.max_episodes
 
 
-def _view(graph: AttackGraph):
+def _view(graph: AttackGraph, target: str | None = None):
     v = graph.with_gpo_expansion()
-    return v, sorted(v.tier0_targets())
+    return v, resolve_targets(v, target)
 
 
-def reference_optimum(graph: AttackGraph, entry: str) -> dict[str, Any]:
+def reference_optimum(graph: AttackGraph, entry: str,
+                      target: str | None = None) -> dict[str, Any]:
     """The exact Tier 1 optimum, computed **before** any training.
 
     This is the horizontal reference a trajectory is plotted against, and it is
@@ -107,8 +108,9 @@ def reference_optimum(graph: AttackGraph, entry: str) -> dict[str, Any]:
     never as a training curve, so the line it must reach has to exist before the
     run starts rather than being read off the run's own best value.
     """
-    view, targets = _view(graph)
-    path = exact_history_search(view, view.find(name=entry), targets,
+    view, targets = _view(graph, target)
+    sources = resolve_sources(view, entry)
+    path = exact_history_search(view, sources, targets,
                                 history_cost_fn(), _ALLOWED, MAX_HOPS)
     if path is None:
         return {"entry": entry, "reachable": False, "cost": None,
@@ -125,7 +127,8 @@ def reference_optimum(graph: AttackGraph, entry: str) -> dict[str, Any]:
 
 def training_run(graph: AttackGraph, entry: str, seed: int,
                  episodes: int = REPRO_EPISODES,
-                 budget: TrainingBudget | None = None) -> dict[str, Any]:
+                 budget: TrainingBudget | None = None,
+                 target: str | None = None) -> dict[str, Any]:
     """One live run, reported against the reference as a landed trajectory.
 
     Raises `BudgetExceeded` rather than returning a partial policy. The wall-clock
@@ -133,8 +136,11 @@ def training_run(graph: AttackGraph, entry: str, seed: int,
     episodes — precise enough for a 30s ceiling and free of any per-step cost.
     """
     budget = budget or TrainingBudget()
-    reference = reference_optimum(graph, entry)
-    view, targets = _view(graph)
+    reference = reference_optimum(graph, entry, target)
+    view, targets = _view(graph, target)
+    sources = resolve_sources(view, entry)
+    if not sources:
+        raise ValueError(f"no node matching start {entry!r}")
 
     requested = episodes
     episodes = budget.capped_episodes(episodes)
@@ -147,7 +153,7 @@ def training_run(graph: AttackGraph, entry: str, seed: int,
         if elapsed > budget.max_seconds:
             raise BudgetExceeded(elapsed, episode, budget)
 
-    result = train(view, view.find(name=entry)[0], targets, history_cost_fn(),
+    result = train(view, sources[0], targets, history_cost_fn(),
                    cfg, allowed_rel_types=_ALLOWED, on_checkpoint=watchdog)
     elapsed = time.perf_counter() - started
 
@@ -156,6 +162,7 @@ def training_run(graph: AttackGraph, entry: str, seed: int,
     if cost is not None and reference["cost"]:
         gap = (cost - reference["cost"]) / reference["cost"]
 
+    path = result.path
     return {
         "provenance": LIVE,
         "entry": entry,
@@ -180,6 +187,9 @@ def training_run(graph: AttackGraph, entry: str, seed: int,
         "success_rate_first_5k": result.success_rate_first_5k,
         "goal_reached_total": result.goal_reached_total,
         "q_size": result.q_size,
+        "hops": path.length if path else None,
+        "route": path.rel_types(view) if path else [],
+        "node_names": ([view.node(n).name for n in path.nodes] if path else []),
     }
 
 

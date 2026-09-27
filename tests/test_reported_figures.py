@@ -26,6 +26,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from stealthpath.risk import PROVISIONAL_WEIGHTS, unsourced
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -80,7 +82,15 @@ def test_the_two_counts_are_different_quantities():
 
 
 def test_docs_quote_the_derived_figures():
-    """Prose is checked against the sources, so a quoted number is guaranteed."""
+    """Prose is checked against the sources, so a quoted number is guaranteed.
+
+    `handoff.md` ships with the repo and is always checked. The write-up docs
+    are gitignored as of 2026-09-27 — kept on disk, out of the repo — so their
+    half of this check skips on a clone rather than failing. The guard is per
+    file, not for the whole test: dropping `handoff.md` from the assertion set
+    because a *different* file is absent would quietly stop checking the one
+    document that is still tracked.
+    """
     n_dropped = len(dropped_edge_types())
     n_edges = sum(dropped_edge_types().values())
     n_deferred = len(unsourced())
@@ -89,8 +99,11 @@ def test_docs_quote_the_derived_figures():
     assert f"{n_dropped} edge types" in handoff
     assert f"{n_edges:,} edges" in handoff
 
-    stage3 = (DOCS / "stage3_risk_model_properties.md").read_text(encoding="utf-8")
-    assert f"Deferred: {n_deferred} weights" in stage3
+    stage3_path = DOCS / "stage3_risk_model_properties.md"
+    if not stage3_path.exists():
+        pytest.skip("stage3_risk_model_properties.md is not in this checkout "
+                    "(gitignored write-up); handoff.md was still checked")
+    assert f"Deferred: {n_deferred} weights" in stage3_path.read_text(encoding="utf-8")
 
 
 def test_superseded_figures_are_not_reintroduced():
@@ -205,6 +218,9 @@ def test_h5_h6_figures_come_from_the_artifact():
                for v in rl.values() for s in v["seeds"])
 
 
+@pytest.mark.skipif(not (DOCS / "abstract.md").exists(),
+                    reason="abstract.md is not in this checkout "
+                           "(gitignored write-up)")
 def test_docs_quote_the_concentration_figures():
     abstract = (DOCS / "abstract.md").read_text(encoding="utf-8")
     for figure in ("79.4%", "95.3%", "0.654", "0.909", "801,792", "400,896"):

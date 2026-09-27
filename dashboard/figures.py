@@ -28,7 +28,8 @@ matplotlib.rcParams["svg.hashsalt"] = "stealthpath"
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
-__all__ = ["rl_trajectory_figure", "save_figure", "INK", "MUTED", "MODAL", "REFERENCE"]
+__all__ = ["rl_trajectory_figure", "save_figure", "route_comparison_figure",
+           "route_pair_figure", "INK", "MUTED", "MODAL", "REFERENCE"]
 
 # Shared with tools/figure_weight_distribution.py so the paper's figures read as
 # one set rather than as two authors' defaults.
@@ -214,3 +215,12 @@ def route_comparison_figure(comparison: dict[str, Any], entry: str,
                  fontsize=11, color=INK)
     fig.tight_layout()
     return fig
+
+
+def route_pair_figure(shortest: dict[str, Any], weighted: dict[str, Any],
+                      entry: str, *, title: str | None = None) -> Figure:
+    """Same drawing as `route_comparison_figure`, from the two records directly."""
+    return route_comparison_figure(
+        {"shortest_path": shortest, "weighted_astar": weighted},
+        entry, title=title,
+    )

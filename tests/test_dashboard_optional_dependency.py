@@ -46,7 +46,7 @@ def test_no_dashboard_module_imports_streamlit_at_module_scope(path):
 def test_the_compute_layer_is_importable_without_streamlit():
     """Whatever is installed locally, these must not depend on it."""
     for mod in ("dashboard", "dashboard.compute", "dashboard.rl_view",
-                "dashboard.figures"):
+                "dashboard.figures", "dashboard.ingest"):
         __import__(mod)
     assert "dashboard.compute" in sys.modules
 
@@ -76,6 +76,20 @@ def test_the_app_layer_holds_no_cost_model_or_planner_logic():
         assert banned not in src, (
             f"dashboard/app.py references {banned!r}. Rendering only — derive it "
             f"in dashboard.compute or dashboard.rl_view instead.")
+
+
+def test_the_upper_bound_caveat_appears_exactly_once():
+    """A copy-paste once doubled the honesty panel; one statement is the point.
+
+    Anchored on **"upper bound"** — the claim itself — rather than on the
+    sentence around it. The surrounding wording has now changed twice ("edge
+    types dropped at load" -> "relationship types" -> "dropped on ingest") and
+    each rename silently broke the guard, which is the opposite of what it is
+    for. What must not be said twice, or stop being said at all, is that a
+    dropped relationship makes the reported cost a bound rather than a price.
+    """
+    src = (DASHBOARD / "app.py").read_text(encoding="utf-8")
+    assert src.count("upper bound") == 1
 
 
 def test_the_app_runs_as_a_script_not_only_as_a_module():

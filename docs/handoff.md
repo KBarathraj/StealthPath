@@ -1,48 +1,37 @@
 # Handoff
 
-**As of 2026-09-08.** `247 passed, 2 skipped`. Clean tree. Everything below runs with no network, no database, no lab.
+**As of 2026-09-10.** The deliverable is the **working web app**, not a paper.
+`311 collected, 2 skipped`. Launch: `streamlit run dashboard/app.py`.
 
-Read `CLAUDE.md` first for the build rules, then this. To find your way around
-the code without reading it all, use the graph index — see "Finding your way
-around" below.
+Read `CLAUDE.md` first for the build rules and the Status block, then this for
+what to build next. `docs/scope_minimum.md` is the floor: the app on the two
+frozen graphs.
 
 ---
 
 ## What the project is
 
-Compares three ways of planning a route through an Active Directory attack
-graph: plain shortest path, a risk-weighted planner that avoids loud actions,
-and a learning planner that adapts. The question is whether the learning planner
-beats a well-tuned static one at staying quiet, and whether that depends on risk
-changing based on what the attacker already did.
+StealthPath is a web application that plans attack paths on an Active Directory
+graph. It computes three routes to Domain Admin — shortest, detection-aware, and
+history-aware — and reports which techniques each one uses and how confidently
+each edge is priced. The learned planner is verified against an exactly computed
+optimum, so the app can prove a route is optimal rather than assert it.
 
-**All three planners are built and run on the real collected data**, plus a
-fourth that exists to score the third: an exact history-aware search used as the
-optimal reference, so the learner reports as an optimality gap rather than a
-training curve.
+The coverage / honesty panel is a product feature. Most tools in this space give
+three confident numbers with no statement of how much of the graph they could
+price. This one shows dropped types, unsourced weights, and missing session or
+delegation data first.
 
-**The headline result is negative and that is the finding.** Adaptive planning
-changes no route on this graph, at any repeat penalty. See "The Shape D collapse"
-in `abstract.md` — the claim is a conditional with a measured antecedent, not an
-unconditional statement about AD.
-
----
-
-## State
-
-**Stage status lives in `CLAUDE.md`, in the Status block — read it there.** It
-is deliberately not repeated here. This file used to carry its own copy, the two
-drifted, and one of them ended up claiming Stage 3 had not started while the
-other correctly reported most of its properties implemented. The Stage 3 exit
-criteria are in the same file, immediately below Status.
+**Stage status lives in `CLAUDE.md`, in the Status block — read it there.** Do
+not copy it into this file.
 
 **That file is local and deliberately untracked** — gitignored, absent from a
 clone by design. If you are reading this from a fresh clone you do not have it;
 ask for it rather than reconstructing its content here.
 
-The short version, for orientation only: Stages 1-4 done, Stage 5's experiments
-done with the write-ups outstanding, Stage 7 (dashboard) proposed and awaiting a
-decision.
+The short version: Stages 1–5's software and measurements are done. The Streamlit
+app is **built**. Remaining work is the three product gaps below. Writing is
+second.
 
 **Frozen graph:** `data/goad_graph.json`, sha256 `3c1bef97f75df7d2…`
 783 nodes / 5825 edges. Published GOADv2 SharpHound 2.3.3 collection
@@ -52,7 +41,8 @@ superseded hashes lives in `data/collection_provenance.json`.
 
 **Three structural holes in the data**, all recorded, none fixable without our
 own lab: sessions near-absent (5 `HasSession` edges), zero delegation edges,
-ADCS dropped (19 edge types still discarded, 2,443 edges).
+ADCS dropped (19 edge types still discarded, 2,443 edges). The app surfaces
+these on the coverage panel rather than hiding them.
 
 All three are checkable rather than asserted, and the 19 is easy to look for in
 the wrong place: it lives in **`data/goad_graph.json` itself**, under
@@ -66,35 +56,100 @@ file, did not find the key, and wrongly reported the figure as unverifiable. The
 
 ## Immediate next steps, in order
 
-**Everything experimental is done.** H1-H6 are measured, Stage 3's gate is
-closed, both Stage 4 tiers are built, and every number is reproducible from
-committed artifacts. What remains is writing, plus one scoping decision.
+**The app is the priority.** Experimental measurement is done and stays in
+`docs/findings.md`. Do not reopen a paper-first queue.
 
-1. **Finish the writing.** In dependency order, roughly a day and a half:
-   - **Figure 3** - `SQL_SVC`'s route comparison. The headline result currently
-     exists only as prose. Plain `SQLAdmin -> HasSession -> AdminTo -> DCSync`
-     (4h, 20.00) against weighted `SQLAdmin -> HasSession -> MemberOf ->
-     GenericWrite` (4h, 15.10); same hop count, `DCSync` avoided, gap 4.9.
-   - **Optimality-gap write-up.** State the reproducibility claim plainly: two
-     independent 50,000-episode runs produced a byte-identical artifact
-     (`7a5d92df`), and the +0.00% gap held across three entry points and five
-     seeds. That answers "did you cherry-pick a seed" mechanically, and most RL
-     work cannot make the first claim at all.
-   - **Related work.** Three verified facts from arXiv:2406.19596, all confirmed
-     against the primary source: it models **three** BloodHound edge types
-     (`AdminTo`, `HasSession`, `MemberOf`) with no access-control edges at all;
-     its graphs are DBCreator synthetics at **r500 (1,493/3,456), r1000
-     (2,996/8,814), r2000 (5,997/18,795)**; and it states single-domain scope
-     with one Domain Admin target, so the cross-forest axis is usable as a
-     **scope difference, never a superiority claim**. Two corrections to make
-     while there: that paper is Data61/CSCRC-led with Adelaide co-authorship, so
-     "the Adelaide programme" is imprecise for it, and the r-graph sizes are
-     r500/r1000/r2000 rather than the r1000/r2000/r4000 currently written.
+**All three product gaps closed 2026-09-19.** Kept below with what closed them,
+because each records a constraint the next change has to respect.
 
-2. **Decide the dashboard scope.** Stage 7 came back into scope on 2026-08-19:
-   faculty expect an upload-a-graph demo showing all three planners, with a
-   validation layer. A full proposal was delivered and is awaiting a decision -
-   see "Dashboard - proposed, not started" below.
+1. **BloodHound CE ingest — DONE.** `dashboard/bloodhound_parser.py` reads a
+   collector export (zip or loose per-class JSON) and `dashboard/ingest.py`
+   accepts it. `tools/validate_parser.py` passes: **all 13 route-bearing
+   relationship types reproduce CE's ingest triple for triple**, and the parsed
+   graph's 5,825 edge triples are identical to `data/goad_graph.json`. The 7
+   remaining diffs are types `admit_edge` drops (`OwnsRaw`, `WriteOwnerRaw`,
+   `Enroll`, `AllExtendedRights`, `DCFor`, `ManageCA`, `ManageCertificates`) and
+   their counts match the frozen graph's own `dropped_unknown_edge_types`.
+
+   Four derivations are CE post-processing and were read off the reference
+   rather than assumed — see the parser's docstring. The one worth repeating:
+   **`DCSync` is not "holds GetChanges and GetChangesAll"**. That rule yields 3
+   of the 6 edges; the other 3 are the DCs themselves, with no ACE behind them,
+   and they are the ones a route traverses. The validator's warning about this
+   was exactly right.
+
+   Two bugs the triple check caught that nothing else would have: SharpHound
+   writes the same object twice inside one zip, once enumerated and once as an
+   empty placeholder (last-wins silently cost 81 `Owns` and 84 `Contains`
+   edges), and `PrimaryGroupSID` carries 62 of the 199 `MemberOf` edges. Both
+   graphs still loaded, priced and routed. Both are now named regression tests.
+
+   **The parser deliberately does less than CE in one place**: local-group RIDs
+   555/562/580 would emit `CanRDP`/`ExecuteDCOM`/`CanPSRemote`, the reference
+   ingest emits none despite four candidate principals, and all three are
+   traversable — so emitting them would move routes away from the graph CE
+   actually produced. `LOCAL_GROUP_RIDS` keeps the full map with only 544 live.
+
+2. **Start/target derivation — DONE.** `stealthpath/targets.py` keys on
+   well-known RIDs (512/519) and domain structure, not on the string
+   `DOMAIN ADMINS`, and every candidate carries the reason it was selected.
+   `target_indices()` returns **exactly** `tier0_targets()` on the frozen graph,
+   pinned by `test_derived_targets_match_tier0_on_the_frozen_graph` — that is
+   what makes it safe to swap in without moving a published number.
+
+   **DC computer objects are now derivable** (`props.isdc`, normalised by the
+   parser) and stay **opt-in**: switching them on adds 3 targets to the
+   reference graph, and every route in `findings.md` is measured without them.
+   The open decision recorded below is therefore resolved as "possible, still
+   off", not as "blocked".
+
+3. **Capped runs — DONE, and the ladder is the answer.** `dashboard/rl_upload.py`
+   tries exact → approximate Q-learning → refusal, and reports *which* rung
+   answered. A capped run is still never a result: `_epsilon` schedules
+   exploration from the full episode count, so a stopped run is not a prefix of
+   a finished one.
+
+   **The tabular learner is deliberately not a rung.** It keeps its reported
+   15/15 result on the frozen graphs through `rl_view`, but for an upload it is
+   both unbounded in memory and measurably less accurate — on the random
+   directories checked it came in +9.3% on a start where the approximator was
+   exact. When both planners finish, the learned route is reported *as a gap
+   against the exact one*, which is the only evidence available that the learner
+   can be trusted on graphs where the exact search cannot run.
+
+   **A bug worth not reintroducing:** the exact search ran over all `sources`
+   while the learner trained on `sources[0]` only, so the reported gap compared
+   two different problems. It read as a badly broken learner (+43% on a random
+   directory) when the learner had found the exact optimum from the node it was
+   given. Invisible on the frozen graph, where every documented entry name
+   resolves to exactly one node. Pinned by
+   `test_the_learner_is_trained_from_every_start_the_exact_search_used`.
+
+   **New, and it is a real loss of guarantee:** `stealthpath/planners/linear_q.py`
+   is Q-learning with hashed state-action features, for graphs too large for the
+   table. On such a graph the exact search does not finish either, so there is
+   no optimum to measure it against and **nothing it produces is verified** —
+   `Path.meta["verified"]` is `False`, the planner name says so, and the UI
+   renders it amber rather than green.
+
+   **The first version of this learner was not good enough, and the reference
+   graph could not show it.** It used ~20 named handcrafted features, reached
+   the exact optimum on all three reference entry points, and was **+32% to
+   +80% above optimum on random directories of 2,900–8,200 nodes** — and did not
+   improve with more episodes, because one global weight per named feature
+   cannot say "take `MemberOf` here but not there". Replacing the basis with
+   three hashed `(edge, mask)` indicators fixed it: **14 of 14 start/graph pairs
+   at +0.00%**, spanning the reference collection and random directories up to
+   20,502 nodes. Memory is the bucket count, not `|S|`, so it does not grow with
+   the directory.
+
+   Two things to not undo: the bucket index is masked rather than taken modulo
+   (so `buckets` must be a power of two), and `_mix` is written out in the
+   module instead of calling `hash()`, because `PYTHONHASHSEED` perturbs
+   `hash()` on str/bytes and determinism is a build rule.
+
+**Writing is next** (Figure 3 / `SQL_SVC` route drawing, optimality-gap
+reproducibility claim, related-work corrections).
 
 ---
 
@@ -108,21 +163,14 @@ committed artifacts. What remains is writing, plus one scoping decision.
   figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
   weights, and the H5/H6 artifact values.
 
-  **Hand-maintained, and it is the pytest counts.** `247 passed, 2 skipped`
+  **Hand-maintained, and it is the pytest counts.** `311 collected, 2 skipped`
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in
-  `tests/test_inventory.json` (205 functions vs 247 collected, 2026-09-08), and
-  running pytest inside pytest to obtain it is not acceptable.
-
-  **The two numbers have collided at 194.** The inventory's `total` is now 194,
-  which is also the collected count as of the previous commit — so grepping the
-  docs for `194` hits both, and they mean different things. The live claim is
-  always the *collected* count; the inventory total is generated, is never
-  quoted in prose, and is not what these four files record. The sweep found
-  all four stale, plus two stale claims in `README.md` (32 unsourced weights,
-  and the learner described as PPO when it is tabular Q-learning). **Update
-  these four by hand whenever the suite count changes.**
+  `tests/test_inventory.json`, and running pytest inside pytest to obtain it is
+  not acceptable. The live claim is always the *collected* count; the inventory
+  total is generated, is never quoted in prose. **Update these four by hand
+  whenever the suite count changes.**
 
 - **Provenance is split across two files and neither says so.** The human
   narrative — why the collection was chosen, what the known gaps are — lives in
@@ -136,10 +184,11 @@ committed artifacts. What remains is writing, plus one scoping decision.
   narrative file existing. `tests/test_reported_figures.py` now pins the split so
   it is visible rather than folklore.
 
-- **Target set** is `tier0_targets()`: DA groups, EA groups, domain objects, by
-  well-known name, never by BloodHound's high-value marking. DC computer objects
-  are deliberately absent — `isdc` is present in real SharpHound data and agrees
-  with `DCFor`, but the decision was left open.
+- **Target set** is now `stealthpath.targets.derive_targets()`: well-known RIDs
+  512/519 plus domain objects, each with a stated reason.
+  `AttackGraph.tier0_targets()` still matches by name and is unchanged — the two
+  agree exactly on the frozen graph and that agreement is a test. **DC computer
+  objects are derivable and deliberately off**; see next-step (2) above.
 - **Three scoped traversal views**, each gating an edge that would otherwise
   claim a capability the attacker lacks: `with_gpo_expansion()`,
   `with_preconditions()` (RBCD needs an SPN), `with_local_admin_expansion()`
@@ -202,11 +251,12 @@ cloner computes a hash matching nothing in the provenance.
 
 ```bash
 pytest -q
+streamlit run dashboard/app.py
 python -m stealthpath.cli compare --graph data/goad_graph.json
 python tools/snapshot_weights.py          # after any weight change
 ```
 
-Three documented entry points, all with verified routes:
+Reference-collection starts the demo uses, all with verified routes:
 `SAMWELL.TARLY@NORTH` (2 hops, needs `with_gpo_expansion()`),
 `SQL_SVC@NORTH` (4 hops), `TYWIN.LANNISTER@SEVENKINGDOMS` (9 hops).
 
@@ -249,79 +299,61 @@ reading it. Three reasons that separation is not optional:
 `graphify query "<question>"` exists but is weak — it returns a truncated
 keyword-matched node list, not an answer. Prefer `explain` and `affected`.
 
-## Dashboard — proposed, not started
+## Web app — built; three gaps remain
 
-Stage 7 came back into scope on 2026-08-19. Faculty expect an upload-a-graph demo
-showing all three planners. A proposal was delivered and **awaits a decision**;
-nothing is built.
+The Streamlit app in `dashboard/` is running software, not a proposal. It loads
+the two frozen graphs or an uploaded StealthPath freeze, shows the coverage
+gate first, then three planners, then optional live Q-learning under a budget.
 
-**Why a validation layer is mandatory, not decoration.** 19 dropped edge types,
-no ADCS, 14 unsourced weights. An arbitrary BloodHound export contains types we
-drop and paths we cannot price, and without a validator the tool prints three
-confident numbers that are wrong. Surfacing coverage turns the limitation into a
-feature.
+**Why the coverage gate is the differentiator, not decoration.** 19 dropped edge
+types, no AD CS, 14 unsourced weights. An arbitrary BloodHound export contains
+types we drop and paths we cannot price, and without a validator the tool prints
+three confident numbers that are wrong. Surfacing coverage is the product.
 
-**The blocking finding — "reuse the existing loader" is not satisfiable as
-stated.** `loader_neo4j.py` reads from a **live Neo4j driver** (Cypher `MATCH`,
-`session.run`); it cannot read a file. `AttackGraph.from_dict` accepts **only**
-our frozen format and raises on anything else. There is no BloodHound CE JSON
-parser anywhere in the repo, and "reuse the loader" plus "no live Neo4j" cannot
-both hold for an upload.
+**CE ingest is built.** `dashboard/bloodhound_parser.py` reconstructs a
+collector export — a zip of per-class JSON with edges nested on the objects
+(`Aces`, `Members`, `Sessions`, …) — into `(nodes, edges)`. `loader_neo4j.py` is
+unchanged and still the freeze path from a live database; the parser reuses its
+`admit_edge()`, `jsonable()` and `dropped_unknown_edge_types` recording rather
+than re-deciding any of it.
 
-What *is* reusable is the part that matters, because the semantics are
-module-level functions with no driver dependency: `admit_edge()` (rule 4 at the
-boundary), `_primary_kind()`, `jsonable()`, `_is_owned()`, `_is_high_value()`,
-and the `dropped_unknown_edge_types` provenance recording. So the honest form is
-**new transport, zero new semantics** — an adapter that emits `(nodes, edges)`
-and routes every categorisation and admission decision through those functions.
+**The coverage panel cannot catch a parser that mis-maps an edge type**, which
+is why `tools/validate_parser.py` compares triples and not counts, and why it
+must keep passing. Run it after any parser change:
 
-**The parser dominates the cost and carries the most risk.** A BloodHound CE
-export is a zip of `users.json`, `groups.json`, `computers.json`, `domains.json`,
-`gpos.json`, `ous.json`, `containers.json`, and the edges are not a flat list —
-they are nested inside `Aces`, `Members`, `Sessions`, `LocalAdmins`,
-`ChildObjects`, `Links` and `AllowedToDelegate` on each object. Reconstructing
-the edge set is what BloodHound's own ingest does. **The validator cannot catch a
-parser that mis-maps an edge type**: a wrong `WriteDacl` → `GenericAll` mapping
-yields 100% coverage and confident wrong numbers.
+```bash
+python tools/validate_parser.py        # VERDICT: PASS
+```
 
-**Recommended stack.** FastAPI plus one static page with Cytoscape.js. Python
-does every computation; JS only draws, so the cost model never crosses the
-language boundary. Roughly 7-9 days, over half of it the parser. Cheaper
-fallback if writing is at risk: Streamlit, ~1.5 days, frozen-format upload only,
-no BloodHound parser.
+**Constraints that hold.** Frozen graphs on disk are immutable; upload is
+session-scoped and never re-freezes anything. No live Neo4j in the UI. Every
+number shown for the frozen graphs must match the pinned tests / `findings.md`
+— if the UI computes something that record does not report, that is a bug. The
+honesty panel is visible without being asked.
 
-**Q-learning is never trained live** — 11k-37k episodes would hang the UI.
-Convenient fact: the trained Q-table is not persisted anywhere (`train()` returns
-it in memory and nothing saves it), but `results/h5_h6.json` already stores the
-Q-learning *results* for both frozen graphs. So "pre-trained" means *stored
-result*, not *stored model*, and the dashboard's numbers match `findings.md` by
-construction.
-
-**Constraints that hold.** Frozen graphs immutable; upload creates a
-session-scoped graph and never re-freezes anything on disk. No live Neo4j. No
-retraining. Every number shown for the frozen graphs must match `findings.md` —
-if the dashboard computes something the paper does not report, that is a bug.
-An honesty panel (dropped types, deferred weights, near-zero sessions, zero
-delegation) is visible without being asked.
-
-**Recommendation on record:** finish the writing first — it is roughly a day and
-a half against the dashboard's seven to nine. If the demo date forces overlap,
-take the Streamlit fallback and drop the parser. A dashboard that loads two
-frozen graphs and reports them honestly demonstrates the research; one that
-mis-parses an examiner's upload live demonstrates the opposite.
+**Q-learning:** on the reference graphs, live training is cheap (~1s). On an
+unknown upload it is not, so `dashboard/rl_upload.py` walks exact → tabular →
+linear approximation → refusal and names the rung that answered. A capped run is
+still a refusal plus the exact-search route, never a finished-looking partial
+policy. `results/h5_h6.json`
+is stored *results* for the two frozen graphs, not a stored model to replay on
+someone else's directory.
 
 ## Where things live
 
 | | |
 |---|---|
+| `dashboard/` | Streamlit app — the deliverable |
+| `docs/scope_minimum.md` | what ships if nothing else lands |
+| `docs/screenshots/` | UI capture placeholder |
 | `graphify-out/` | queryable code index (gitignored, regenerable, never a citation) |
-| `docs/abstract.md` | merged framing, contributions, H3 scope statement |
-| `docs/findings.md` | running results log, every entry tied to a graph hash |
+| `docs/abstract.md` | engine write-up (not the homepage) |
+| `docs/findings.md` | dated results log, every entry tied to a graph hash |
 | `docs/stage2_joint_capability_audit.md` | telemetry baseline, named failure modes, per-edge status |
 | `docs/stage3_risk_model_properties.md` | 16 properties, reduced gate of 8 |
 | `docs/generator_vs_real_distribution.md` | why `random_ad` can't back distributional claims |
-| `docs/stage1_lab_runbook.md` | lab build, target-set policy |
-| `docs/stage0_*.md` | **parked** — research phase, after Stage 5 |
+| `docs/stage1_lab_runbook.md` | how to freeze your own lab collection |
+| `docs/stage0_*.md` | **frozen** — do not edit hypothesis statements |
 
 `CLAUDE.md` is gitignored, so it is **not in the repo** — a fresh clone gets
 neither the build rules nor the Status block. **This is deliberate and stays

@@ -34,6 +34,12 @@ from stealthpath.planners.exact_history import exact_history_search
 from stealthpath.planners.shortest_path import dijkstra
 from stealthpath.planners.weighted_astar import astar
 from stealthpath.risk import PROVISIONAL_WEIGHTS, history_cost_fn, static_cost_fn, weight_of
+from stealthpath.defend import (
+    choke_points, detection_summary, exposure_report, route_detection,
+)
+from stealthpath.targets import (
+    Candidate, derive_sources, derive_targets, reaching_set,
+)
 
 # Imported, not reimplemented. `_path_record` is the exact record shape and
 # `static_risk` derivation that produced the committed artifact, and ENTRY_POINTS
@@ -50,6 +56,11 @@ from tools.run_h5_h6 import ENTRY_POINTS, MAX_HOPS, _path_record
 __all__ = [
     "graph_profile", "coverage", "structural_absences",
     "compare_entry_point", "qlearning_result", "route_static_risk_per_hop",
+    "starting_points", "target_names", "target_candidates", "annotate_hops",
+    "route_detection_rows", "exposure_rows", "choke_point_rows",
+    "resolve_sources", "resolve_targets",
+    "with_per_hop_weights",
+    "split_comparison", "provenance_triple", "pricing_verdict", "routing_verdict",
     "ENTRY_POINTS", "MAX_HOPS", "ADCS_NODE_KINDS", "RESULTS_PATH",
 ]
 
@@ -164,7 +175,8 @@ def _price_status(rel_type: str) -> str:
 
 
 def coverage(graph: AttackGraph,
-             entries: Sequence[str] | None = None) -> dict[str, Any]:
+             entries: Sequence[str] | None = None,
+             target: str | None = None) -> dict[str, Any]:
     """Pricing provenance per edge and per route.
 
     Both halves are reported because either alone misleads. A route can be fully
@@ -198,7 +210,7 @@ def coverage(graph: AttackGraph,
         "by_edge_type": by_type,
         "weights_total": len(PROVISIONAL_WEIGHTS),
         "weights_sourced": sum(1 for w in PROVISIONAL_WEIGHTS.values() if w.sourced),
-        "routes": {e: _route_coverage(graph, e) for e in entries},
+        "routes": {e: _route_coverage(graph, e, target) for e in entries},
     }
 
 
@@ -212,10 +224,11 @@ def _status_block(counts: Counter, total: int) -> dict[str, Any]:
     }
 
 
-def _route_coverage(graph: AttackGraph, entry: str) -> dict[str, Any]:
+def _route_coverage(graph: AttackGraph, entry: str,
+                    target: str | None = None) -> dict[str, Any]:
     """Per-hop pricing provenance for each planner's route from `entry`."""
     out: dict[str, Any] = {}
-    for planner, record in compare_entry_point(graph, entry).items():
+    for planner, record in compare_entry_point(graph, entry, target).items():
         if record is None:
             out[planner] = None
             continue
@@ -278,17 +291,375 @@ def route_static_risk_per_hop(route: Sequence[str]) -> list[float]:
     return [weight_of(r) for r in route]
 
 
-def compare_entry_point(graph: AttackGraph, entry: str) -> dict[str, Any]:
+def annotate_hops(route: Sequence[str]) -> list[dict[str, Any]]:
+    """One record per hop: technique, what it costs, and whether that cost is cited.
+
+    This is the per-hop view the route panel renders. It exists so the page can
+    show *which hop* is provisionally priced rather than only a route-level
+    "not fully sourced" flag — a single unsourced hop in the middle of a route
+    is the thing a reader needs to see, and a summary number hides exactly that.
+    """
+    out: list[dict[str, Any]] = []
+    for rel in route:
+        priced = rel in PROVISIONAL_WEIGHTS
+        out.append({
+            "rel_type": rel,
+            "weight": weight_of(rel) if priced else None,
+            "status": _price_status(rel),
+            "category": category_of(rel),
+        })
+    return out
+
+
+def route_detection_rows(route: Sequence[str]) -> dict[str, Any]:
+    """Detection posture of one route, flattened for display and export.
+
+    The SOC-facing projection of data the weight table has carried since
+    Stage 2: every hop already knows its ATT&CK technique and the SigmaHQ rule
+    its price was derived from, and nothing displayed either.
+    """
+    summary = detection_summary(route)
+    return {
+        "hops": summary["hops"],
+        "counts": summary["counts"],
+        "blind_hops": summary["blind_hops"],
+        "conditional_hops": summary["conditional_hops"],
+        "techniques": summary["techniques"],
+        "detail": [
+            {
+                "rel_type": h.rel_type,
+                "weight": h.weight,
+                "technique": h.technique,
+                "visibility": h.visibility,
+                "native": h.native,
+                "endpoint": h.endpoint,
+                "source": h.source,
+            }
+            for h in route_detection(route)
+        ],
+    }
+
+
+def exposure_rows(graph: AttackGraph, limit: int | None = None) -> list[dict[str, Any]]:
+    """Every account ranked by how close it is to tier-0.
+
+    `static_cost` is deliberately named: this is the static weight model over
+    the whole directory in one pass, not the history-aware search the route
+    panel runs for a single start. The two disagree slightly and the UI says so.
+    """
+    return [
+        {
+            "account": e.name,
+            "kind": e.kind,
+            "hops": e.hops,
+            "static_cost": e.static_cost,
+            "reaches": e.target_name,
+            "first_step": e.first_hop,
+            "reachable": e.reachable,
+        }
+        for e in exposure_report(graph, limit=limit)
+    ]
+
+
+def choke_point_rows(graph: AttackGraph, top: int = 10) -> list[dict[str, Any]]:
+    """Relationships ranked by how many accounts lose tier-0 reach without them."""
+    return [
+        {
+            "relationship": c.rel_type,
+            "from": c.source_name,
+            "to": c.target_name,
+            "accounts_cut": c.accounts_cut,
+            "of_accounts": c.accounts_before,
+            "share_cut": c.share_cut,
+            "actionable": c.actionable,
+            "caveat": c.caveat,
+        }
+        for c in choke_points(graph, top=top)
+    ]
+
+
+def starting_points(graph: AttackGraph) -> list[str]:
+    """Names a user can start from, in a useful order.
+
+    Owned nodes first (BloodHound foothold marks), then documented provenance
+    entries that resolve on this graph, then everything else **with accounts
+    that can actually reach a target ahead of those that cannot**.
+    Deduplicated, first occurrence wins.
+
+    That last clause is the whole point of the ordering. The first entry is the
+    UI default, and on a real collection most accounts cannot reach Domain Admin
+    at all. Ordering only by "has a session on a collected machine" put `HODOR`
+    at the top of an upload of the reference collection -- a session holder with
+    no route -- so the page's first answer was "No route reported" for a graph
+    that contains two good routes. Reachability is not a tiebreak here; it is
+    the primary key below the two authored groups.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def add(name: str) -> None:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+
+    for i in graph.entry_nodes():
+        add(graph.nodes[i].name)
+    documented = graph.provenance.get("entry_points") or {}
+    if isinstance(documented, dict):
+        for key in documented:
+            if key in ("note",) or "NO unprivileged" in str(documented[key]).upper():
+                continue
+            if graph.find(name=key):
+                add(key)
+
+    reaching = _reaching_names(graph)
+    privileged = _privileged_names(graph)
+    sessioned = [c.name for c in derive_sources(graph)
+                 if c.confidence == "structure"]
+    ranked = _ranked_user_names(graph)
+
+    # Two keys, applied in this order to every group below: can it reach a
+    # target, and is it not already privileged. Both had to be applied
+    # *uniformly*. Demoting privileged accounts only within the flat user list
+    # left `ADMINISTRATOR@PHANTOM.CORP` at the top of the SpecterOps sample,
+    # because it also holds a session and the session group ran first — so the
+    # app's opening answer was a one-hop `MemberOf` into Enterprise Admins from
+    # an account that was already there.
+    def useful(name: str) -> bool:
+        return name in reaching and name not in privileged
+
+    for group in (sessioned, ranked):
+        for name in group:
+            if useful(name):
+                add(name)
+    for group in (sessioned, ranked):
+        for name in group:
+            if name in reaching:
+                add(name)
+    # Unreachable starts are listed, not hidden: "this account cannot reach
+    # Domain Admin" is a real answer someone may want, and silently dropping it
+    # would make the graph look smaller than it is.
+    for group in (sessioned, ranked):
+        for name in group:
+            add(name)
+
+    if not out:
+        out = [n.name for n in graph.nodes]
+    return out
+
+
+def _privileged_names(graph: AttackGraph) -> set[str]:
+    """Names of accounts that are already tier-0, by either available signal.
+
+    `admincount` is AdminSDHolder protection, which a directory sets on
+    privileged principals. The second signal exists because a name in this list
+    may belong to more than one object — the SpecterOps sample has a
+    `CertTemplate` and a `User` both called `ADMINISTRATOR@PHANTOM.CORP`, and
+    `resolve_sources` matches on the name, so the flag has to be checked across
+    every node that answers to it.
+    """
+    out: set[str] = set()
+    for node in graph.nodes:
+        if node.props.get("admincount") is True or node.high_value:
+            out.add(node.name)
+    return out
+
+
+def _reaching_names(graph: AttackGraph) -> set[str]:
+    """Names of nodes from which some derived target is reachable.
+
+    Computed on the same view and traversal set the planners use, so "can
+    reach" means there what it means here. Cost and the hop cap are ignored,
+    which makes it an over-approximation: it can promote a start that turns out
+    to be unreachable within 20 hops, and it never demotes one that has a route.
+    """
+    view = graph.with_gpo_expansion()
+    targets = [c.index for c in derive_targets(view)]
+    return {view.nodes[i].name
+            for i in reaching_set(view, targets, _TRAVERSAL_ALLOWED)}
+
+
+def _ranked_user_names(graph: AttackGraph) -> list[str]:
+    """Every User account, ordinary accounts before already-privileged ones.
+
+    Stable within each group (node-index order), so the list does not reshuffle
+    between runs on the same graph. The reachable/unreachable split is applied
+    by the caller, on top of this.
+
+    **An account that is already tier-0 is a poor default.** It starts at the
+    destination, so the route it produces is one `MemberOf` hop and tells the
+    reader nothing. On the SpecterOps public sample the first reachable user in
+    node order is `ADMINISTRATOR`, which made the app's opening answer a
+    one-hop route into Enterprise Admins — true, and a bad demonstration.
+    `derive_sources` already applied this rule; this list did not, and this list
+    is the one that feeds the picker.
+    """
+    ordinary, privileged = [], []
+    for node in graph.nodes:
+        if node.kind.lower() != "user":
+            continue
+        (privileged if node.props.get("admincount") is True
+         else ordinary).append(node.name)
+    return ordinary + privileged
+
+
+def target_candidates(graph: AttackGraph) -> list[Candidate]:
+    """Destinations with the argument for each, for an upload the tool has never
+    seen.
+
+    `tier0_targets()` finds Domain Admins by that exact display name, which is
+    what makes the reference demo work and what returns an empty set on a
+    renamed or non-English directory -- reported to the user as "no route",
+    which is indistinguishable from a hardened forest. `stealthpath.targets`
+    keys on well-known RIDs instead and carries a reason per candidate.
+
+    On the frozen graphs the two agree exactly, which
+    `test_derived_targets_match_tier0_on_the_frozen_graph` pins: this generalises
+    the target set without moving a published number.
+    """
+    return derive_targets(graph.with_gpo_expansion())
+
+
+def target_names(graph: AttackGraph) -> list[str]:
+    """Default destinations, derived rather than matched by well-known name."""
+    view = graph.with_gpo_expansion()
+    names = [c.name for c in derive_targets(view)]
+    return names or [n.name for n in view.nodes if n.kind.lower() == "domain"]
+
+
+def _exact_name_hits(view: AttackGraph, name: str) -> list[int]:
+    needle = name.upper()
+    return [i for i, n in enumerate(view.nodes) if n.name.upper() == needle]
+
+
+def resolve_sources(view: AttackGraph, entry: str) -> list[int]:
+    """Start nodes for a selected name.
+
+    Exact match first. `AttackGraph.find` is a substring search, which is the
+    right default when a test passes `SQL_SVC@NORTH`, and the wrong one when
+    the UI passes a full UPN that is also a suffix of other names.
+    """
+    exact = _exact_name_hits(view, entry)
+    if exact:
+        return sorted(exact)
+    return sorted(view.find(name=entry))
+
+
+def resolve_targets(view: AttackGraph, target: str | None) -> list[int]:
+    """Destinations for a selected name.
+
+    Exact match first so choosing the domain object `NORTH.SEVENKINGDOMS.LOCAL`
+    does not also select every `…@NORTH.SEVENKINGDOMS.LOCAL` account — those
+    UPNs contain the domain string, and a substring hit on the start node
+    reports a 0-hop route that is not a route.
+    """
+    if not target:
+        # Derived, not name-matched -- see `target_candidates`. Identical to
+        # tier0_targets() on the frozen graphs, and non-empty on a directory
+        # whose privileged groups are renamed or localised.
+        return sorted(c.index for c in derive_targets(view))             or sorted(view.target_nodes())
+    exact = _exact_name_hits(view, target)
+    if exact:
+        return sorted(exact)
+    pool = [c.index for c in derive_targets(view)] or view.target_nodes()
+    needle = target.upper()
+    hits = [i for i in pool if needle in view.nodes[i].name.upper()]
+    if hits:
+        return sorted(hits)
+    return sorted(view.find(name=target))
+
+
+def with_per_hop_weights(record: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Attach static per-hop weights for the route figure. Display only."""
+    if record is None:
+        return None
+    return {**record, "static_risk_per_hop": route_static_risk_per_hop(record["route"])}
+
+
+def provenance_triple(graph: AttackGraph, entry: str,
+                      target: str | None = None
+                      ) -> tuple[dict[str, Any] | None, dict[str, Any] | None,
+                                 dict[str, Any] | None]:
+    """Per-planner hop provenance for one start, unpacked for the UI."""
+    block = coverage(graph, entries=[entry], target=target)["routes"].get(entry) or {}
+    return (block.get("shortest_path"),
+            block.get("weighted_astar"),
+            block.get("exact_history"))
+
+
+def split_comparison(comparison: dict[str, Any]
+                     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None,
+                                dict[str, Any] | None]:
+    """Unpack the three planner records so a UI layer never names the keys."""
+    return (comparison["shortest_path"],
+            comparison["weighted_astar"],
+            comparison["exact_history"])
+
+
+def pricing_verdict(graph: AttackGraph) -> dict[str, Any]:
+    """GOOD only when every walkable edge is sourced and nothing was dropped.
+
+    That is the coverage question the honesty panel exists to answer — not a
+    concentration statistic, and not whether two planners disagree. A graph can
+    be fully priced and still have identical shortest/weighted routes.
+    """
+    cov = coverage(graph, entries=())
+    profile = graph_profile(graph)
+    walk = cov["walkable_edges"]
+    dropped = profile["dropped_edge_types"]
+    dropped_count = dropped["edge_count"] if dropped["recorded"] else 0
+    good = walk["unpriced"] == 0 and walk["sourced_share"] == 1.0 and dropped_count == 0
+    return {
+        "verdict": "GOOD" if good else "POOR",
+        "walkable_sourced_share": walk["sourced_share"],
+        "walkable_sourced": walk["sourced"],
+        "walkable_total": walk["total"],
+        "dropped_types": dropped["type_count"] if dropped["recorded"] else None,
+        "dropped_edges": dropped_count if dropped["recorded"] else None,
+        "dropped_recorded": dropped["recorded"],
+        "weights_sourced": cov["weights_sourced"],
+        "weights_total": cov["weights_total"],
+    }
+
+
+def routing_verdict(graph: AttackGraph, entry: str,
+                    target: str | None = None) -> dict[str, Any]:
+    """GOOD when detection-aware routing picks a different technique sequence.
+
+    Same hop count with a different edge sequence still counts as GOOD — that is
+    the SQL_SVC case. Identical sequences are POOR: the cost model has nothing
+    to choose on that start.
+    """
+    shortest, weighted, _ = split_comparison(compare_entry_point(graph, entry, target))
+    if shortest is None or weighted is None:
+        return {"verdict": "POOR", "differs": False, "reachable": False}
+    differs = shortest["route"] != weighted["route"]
+    return {
+        "verdict": "GOOD" if differs else "POOR",
+        "differs": differs,
+        "reachable": True,
+        "shortest_route": shortest["route"],
+        "weighted_route": weighted["route"],
+    }
+
+
+def compare_entry_point(graph: AttackGraph, entry: str,
+                        target: str | None = None) -> dict[str, Any]:
     """All three planners from one entry point, on the GPO-expansion view.
 
     The view and the allowed set are not options. Every route in findings.md
     runs on `with_gpo_expansion()` over `DEFAULT_TRAVERSAL_SET | GPO_EXPANSION_EDGES`;
     running the default set instead silently drops `GPLink` and changes
     SAMWELL's route, which is a two-hop route that traverses one.
+
+    `target` is an exact node name when it matches one (the dashboard dropdown
+    always does). Fragments such as `DOMAIN ADMINS` still match inside the
+    tier-0 set. Omit it to use `tier0_targets()`, with high-value as fallback
+    when that set is empty — the documented GOAD entries never hit the fallback.
     """
     view = graph.with_gpo_expansion()
-    targets = sorted(view.tier0_targets())
-    sources = view.find(name=entry)
+    targets = resolve_targets(view, target)
+    sources = resolve_sources(view, entry)
     return {
         "shortest_path": _path_record(view, dijkstra(
             view, sources, targets, allowed_rel_types=_TRAVERSAL_ALLOWED,

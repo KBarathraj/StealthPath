@@ -22,6 +22,7 @@ of that — our answer, and the Cypher to paste into BloodHound to check it.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from typing import Sequence
@@ -239,6 +240,81 @@ def _print_provenance(graph: AttackGraph, indent: str = "  ") -> None:
           f"re-freeze before relying on the graph.")
 
 
+def cmd_triage(args: argparse.Namespace) -> int:
+    """SOC triage, headless.
+
+    Exists so the defender view can run in a playbook or a scheduled job rather
+    than only in a browser. `--json` emits the whole report on stdout, which is
+    the form a ticketing system or a SIEM enrichment step wants; the default
+    human output is for someone reading a terminal during an incident.
+    """
+    from .defend import choke_points, detection_summary, exposure_report
+
+    g = _load(args)
+    # **Unlimited.** `--limit` is a display control and must not reach the
+    # headline: computing it over the truncated list reported "6 of 6 accounts
+    # can reach tier-0" for a directory where the answer is 11 of 28, which is
+    # the kind of number somebody pastes into a ticket.
+    everyone = exposure_report(g)
+    reachable = [e for e in everyone if e.reachable]
+
+    rows = everyone
+    if args.account:
+        needle = args.account.upper()
+        rows = [e for e in everyone if needle in e.name.upper()]
+        if not rows:
+            print(f"No account matching {args.account!r}.")
+            return 1
+
+    if args.json:
+        payload = {
+            "accounts_assessed": len(everyone),
+            "can_reach_tier0": len(reachable),
+            "exposure": [
+                {"account": e.name, "hops": e.hops, "static_cost": e.static_cost,
+                 "first_step": e.first_hop, "reaches": e.target_name,
+                 "reachable": e.reachable}
+                for e in rows
+            ],
+            "choke_points": [
+                {"relationship": c.rel_type, "from": c.source_name,
+                 "to": c.target_name, "accounts_cut": c.accounts_cut,
+                 "of_accounts": c.accounts_before, "actionable": c.actionable,
+                 "caveat": c.caveat}
+                for c in choke_points(g, top=args.top)
+            ],
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    # Both halves of the headline describe the directory. Mixing them — the
+    # directory-wide reachable count over the *filtered* total — printed
+    # "11 of 2 accounts can reach tier-0".
+    print(f"\n{len(reachable)} of {len(everyone)} accounts can reach tier-0.")
+    if args.account:
+        print(f"Filtered to {len(rows)} matching {args.account!r}.")
+    print()
+    print(f"{'ACCOUNT':<44} {'HOPS':>4} {'COST':>7}  FIRST STEP")
+    for e in rows[: args.limit or 20]:
+        if not e.reachable:
+            continue
+        print(f"{e.name[:44]:<44} {e.hops:>4} {e.static_cost:>7.2f}  {e.first_hop}")
+        if args.detail and e.first_hop:
+            summary = detection_summary([e.first_hop])
+            hop = summary["detail"][0]
+            print(f"{'':<44} {'':>4} {'':>7}  detection: {hop.visibility}"
+                  + (f" ({hop.technique})" if hop.technique else ""))
+
+    print("\nFix first — relationships by accounts cut:\n")
+    for c in choke_points(g, top=args.top):
+        mark = " " if c.actionable else "*"
+        print(f" {mark} {c.accounts_cut:>3}/{c.accounts_before} "
+              f"{c.rel_type:<16} {c.source_name[:30]} -> {c.target_name[:30]}")
+        if c.caveat:
+            print(f"     * {c.caveat}")
+    return 0
+
+
 def cmd_freeze(args: argparse.Namespace) -> int:
     g = _load(args)
     if args.provenance:
@@ -295,6 +371,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_source_args(sp)
     sp.add_argument("--max-hops", type=int, default=None)
     sp.set_defaults(func=cmd_compare)
+
+    sp = sub.add_parser("triage", help="SOC view: account exposure and what to fix")
+    add_source_args(sp)
+    sp.add_argument("--account", help="filter to accounts matching this name")
+    sp.add_argument("--limit", type=int, default=20,
+                    help="how many accounts to list (default 20)")
+    sp.add_argument("--top", type=int, default=10,
+                    help="how many choke points to rank (default 10)")
+    sp.add_argument("--detail", action="store_true",
+                    help="annotate each first step with its detection posture")
+    sp.add_argument("--json", action="store_true",
+                    help="emit JSON on stdout for a ticket or SIEM enrichment")
+    sp.set_defaults(func=cmd_triage)
 
     sp = sub.add_parser("freeze", help="snapshot the graph to JSON")
     add_source_args(sp)

@@ -36,9 +36,20 @@ PERT_SHA = "7f80e6dc02ba3aed4896a5f201fbccd447dfe893ba6f16de2dd5b99ab88ed172"
 
 @pytest.fixture(scope="module")
 def graphs():
+
+# Skips rather than fails when the artifact is absent. It is gitignored as of
+# 2026-09-27 — kept on disk, out of the repo, because it backs the parked
+# write-up rather than the running app. A fresh clone therefore reports these
+# as skipped, which is visible in pytest's summary; a silent pass would not be.
+    if not Path(PERTURBED_GRAPH).exists():
+        pytest.skip("goad_graph_perturbed.json is not present "
+                    "(gitignored research artifact)")
     return AttackGraph.load(BASE_GRAPH), AttackGraph.load(PERTURBED_GRAPH)
 
 
+@pytest.mark.skipif(not Path(PERTURBED_GRAPH).exists(),
+                    reason="goad_graph_perturbed.json is not present "
+                           "(gitignored research artifact)")
 def test_graph_hashes_match_the_cited_values():
     """Every H5/H6 figure is cited against these two hashes. If they move, the
     results describe a different substrate and must be regenerated."""

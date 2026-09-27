@@ -2,10 +2,48 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Local working notes for coding agents. Deliberately untracked — they are a
+# personal scratchpad, and duplicating the status block into the repo is the
+# drift the handoff warns about.
 CLAUDE.md
-# data/ is NOT ignored. Frozen graphs are committed on purpose — Stage 5 cites a
-# graph by hash, and a re-collection would silently change the substrate.
-# graphify-out/ IS ignored, and is the opposite case: a regenerable index of the
-# source tree, not a collection. It is not an AD graph and must never be cited
-# as one.
+AGENTS.md
+
+# graphify-out/ is a regenerable index of the source tree, not a collection.
+# It is not an AD graph and must never be cited as one.
 graphify-out/
+
+# Coursework tooling. Builds the Review-1 report from templates under
+# ~/Downloads, so it hardcodes absolute paths and runs for nobody else. Kept on
+# disk, out of the repo. `tools/_*` catches the .docx dumps it unpacks.
+tools/build_review1_report.py
+tools/_*
+
+# --------------------------------------------------------------------------
+# Research artifacts: kept on disk, out of the repo (2026-09-27)
+# --------------------------------------------------------------------------
+# The repo ships the app. These back the parked write-up rather than the
+# running tool, and they are most of its weight.
+#
+# `data/goad_graph.json` is NOT here and must not be: it is the collection the
+# app demos on and every reported number cites by hash. Re-collecting would
+# silently change the substrate under results already generated.
+#
+# Tests that need one of these skip rather than fail, so a fresh clone is green
+# and pytest reports the skip count. Restoring any of them is one `git add -f`.
+data/goad_graph_perturbed.json
+data/raw_collection/
+results/figures/
+
+# Research write-up. The app-facing docs (handoff, scope_minimum) stay tracked.
+docs/abstract.md
+docs/findings.md
+docs/generator_vs_real_distribution.md
+docs/stage0_hypotheses.md
+docs/stage0_related_work.md
+docs/stage1_lab_runbook.md
+docs/stage2_joint_capability_audit.md
+docs/stage3_risk_model_properties.md
+
+# Screenshots of a superseded dashboard layout. Removed rather than kept stale.
+docs/screenshots/

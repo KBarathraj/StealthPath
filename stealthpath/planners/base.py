@@ -2,13 +2,14 @@
 Shared types for all three planners.
 
 The whole project is a *comparison* between three planners (shortest-path, A*,
-PPO). If they return different shapes, the evaluation code turns into three
-special cases and every comparison needs a translation layer. So: one `Path`
-type, one `Planner` protocol, fixed now, in Stage 1, while it is cheap to fix.
+tabular Q-learning). If they return different shapes, the evaluation code turns
+into three special cases and every comparison needs a translation layer. So: one
+`Path` type, one `Planner` protocol, fixed now, in Stage 1, while it is cheap to
+fix.
 
-The RL agent in Stage 4 will produce a trajectory rather than a search result.
-That's fine — it still emits a node sequence and an edge sequence, so it still
-fits `Path`. Keep it that way.
+The learning planner produces a trajectory rather than a search result. That's
+fine — it still emits a node sequence and an edge sequence, so it still fits
+`Path`. Keep it that way.
 """
 
 from __future__ import annotations

@@ -25,14 +25,22 @@ tools/_*
 # The repo ships the app. These back the parked write-up rather than the
 # running tool, and they are most of its weight.
 #
-# `data/goad_graph.json` is NOT here and must not be: it is the collection the
-# app demos on and every reported number cites by hash. Re-collecting would
-# silently change the substrate under results already generated.
+# Two things are deliberately NOT here and must not be added:
 #
-# Tests that need one of these skip rather than fail, so a fresh clone is green
-# and pytest reports the skip count. Restoring any of them is one `git add -f`.
+# `data/goad_graph.json` — the collection the app demos on and every reported
+# number cites by hash. Re-collecting would silently change the substrate under
+# results already generated.
+#
+# `data/raw_collection/` — briefly ignored on 2026-09-27 and restored the same
+# day. It is 96 KB, and it is the ground truth `tools/validate_parser.py`
+# compares the BloodHound parser against: the only evidence that the upload
+# path reproduces CE's ingest rather than inventing edges. Trading that for
+# 96 KB was a bad deal. Do not re-ignore it to save space.
+#
+# Tests that need one of the entries below skip rather than fail, so a fresh
+# clone is green and pytest reports the skip count. Restoring one is a
+# `git add -f`.
 data/goad_graph_perturbed.json
-data/raw_collection/
 results/figures/
 
 # Research write-up. The app-facing docs (handoff, scope_minimum) stay tracked.

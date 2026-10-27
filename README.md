@@ -3,17 +3,19 @@
 A web app that plans attack paths through an Active Directory graph and
 **says how much of that graph it could actually price.**
 
-Drop a frozen attack graph (or use the bundled reference collection). StealthPath
-computes three routes to Domain Admin — **shortest**, **detection-aware**, and
-**history-aware** — and shows which techniques each one uses, what each hop
-costs, and how confidently each edge is priced. The learned planner is checked
-against an exactly computed optimum, so the app can prove a route is optimal
-rather than assert it.
+Drop in a SharpHound / BloodHound CE collector export (or use the bundled
+reference collection). StealthPath computes three routes to Domain Admin —
+**shortest**, **detection-aware**, and **history-aware** — and shows which
+techniques each one uses, what each hop costs, and how confidently each edge is
+priced. The learned planner is checked against an exactly computed optimum, so
+the app can prove a route is optimal rather than assert it.
 
 Most tools in this space print three confident numbers with no statement of
-coverage. This one refuses to: dropped edge types, unsourced weights, and
-missing session or delegation data show up **before** the routes, not in a
-footnote.
+coverage. This one refuses to. **Beside every route** it states how many hops
+carry a cited price, whether optimality was proved, and what was dropped on
+ingest — which makes the cost an upper bound. The directory-wide gaps
+(unsourced weights, missing session or delegation data, how concentrated the
+costs are) sit one click below, under *Graph data quality*.
 
 ## For a SOC analyst
 
@@ -50,37 +52,56 @@ execute techniques. Intended for an isolated lab only.
 
 ```bash
 python -m venv .venv && .venv/Scripts/activate     # Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-pip install streamlit
-pytest -q                                          # 311 collected, 2 skipped; no network, no database
+pip install -r requirements.txt -r requirements-dashboard.txt
+pytest -q                                          # 327 collected, 2 skipped; no network, no database
 streamlit run dashboard/app.py
 ```
 
-1. **Install** the venv and dependencies (Streamlit is optional for the test
-   suite; it is required to launch the UI).
+1. **Install** the venv and dependencies. Streamlit lives in
+   `requirements-dashboard.txt`, pinned, and is deliberately optional: the test
+   suite runs without it.
 2. **Launch** `streamlit run dashboard/app.py`.
-3. **Upload** a StealthPath freeze (JSON with `"format": "stealthpath.attackgraph/1"`),
-   or pick a bundled demo graph in the sidebar. A raw SharpHound/BloodHound zip
-   is refused — freeze first:
+3. **Load a graph** in the sidebar, one of:
+   - a **SharpHound / BloodHound CE collector export** — the `.zip`, or its
+     per-class `.json` files. Upload every domain's zip together: cross-domain
+     ACEs only resolve once all of them are in the same table. The parser is
+     checked triple by triple against CE's own ingest
+     (`python tools/validate_parser.py`); an upload is session-scoped and never
+     written to `data/`.
+   - a **StealthPath freeze** (JSON with `"format": "stealthpath.attackgraph/1"`),
+     e.g. from a live BloodHound database:
 
-   ```bash
-   python -m stealthpath.cli freeze --uri bolt://localhost:7687 --password X --out my_graph.json
-   ```
+     ```bash
+     python -m stealthpath.cli freeze --uri bolt://localhost:7687 --password X --out my_graph.json
+     ```
 
-4. **Read the output**, in order: coverage (what could not be priced), then the
-   three routes, then Q-learning if you train it. The app also measures how
-   concentrated this directory's detection costs are, so you can see whether
-   detection-aware routing can help **on this graph**.
+   - the **bundled demo** (the reference collection).
+4. **Pick a start account and press *Find the route*.** Accounts that can
+   actually reach a target are listed first.
 
 ## What you are looking at
 
+The **Attack route** tab, top to bottom:
+
 | Panel | What it does |
 |---|---|
-| Coverage / honesty | Dropped types, AD CS not modelled, session and delegation counts, sourced vs provisional weights |
-| Shortest path | Fewest hops (the BloodHound-style baseline) |
-| Risk-weighted A\* | Same endpoints, priced by how loud each technique is |
-| Exact history | Optimal route under a history-dependent cost (the reference) |
-| Q-learning | Learns a policy on this start/target; reported as a gap vs exact search |
+| Verdict and tiles | *Proved optimal* or *Learned — not proved*; cost, hops, blind hops, ATT&CK techniques |
+| The route | A stepper: each principal, and between them the technique, its price, and a dot for whether anything would log it |
+| Would you see it? | Hops that are covered, need a SACL, are blind, or are unverified |
+| Can you trust it? | Hops with a cited price, whether optimality was proved, the independent learner's gap, what was dropped on ingest |
+| Detection evidence | Per hop: ATT&CK ID, the named SigmaHQ rule the price came from, telemetry dependency |
+| Compare the three planners | Shortest path (fewest hops) · risk-weighted A\* · exact history-aware search |
+| Graph data quality | Pricing coverage, same-cost share, AD CS / session / delegation counts — whether detection-aware routing can help **on this graph** |
+| Recorded result | For the demo starts only: the stored Q-learning run from `results/h5_h6.json` |
+
+**Where a route comes from.** The exact history-aware search runs first, under
+a deadline, and is the only planner that can say *proved*. A learner
+(Q-learning over hashed state-action features) runs beside it as a check and is
+reported as a gap against it. On a directory too large for the exact search to
+finish, the learned route is shown as an **unverified candidate**, in amber. If
+neither finishes, the app refuses rather than showing a partial policy.
+
+The **Defend** tab is described above.
 
 The engine behind those numbers — sourced weights, frozen graphs, property
 tests — is why a demo on the reference collection is trustworthy. It is not
@@ -107,6 +128,8 @@ dashboard/                  Streamlit app (upload, route, defend, planners)
   bloodhound_parser.py      SharpHound / BloodHound CE export -> (nodes, edges)
   ingest.py                 Upload: collector export or StealthPath freeze
   rl_upload.py              Planner ladder: exact -> learned -> refusal
+data/raw_collection/        The collector export the reference graph was ingested
+                            from; ground truth for tools/validate_parser.py
 docs/
   handoff.md                Current priorities and what was decided
   scope_minimum.md          What ships if nothing else lands

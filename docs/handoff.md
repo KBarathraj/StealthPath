@@ -1,11 +1,11 @@
 # Handoff
 
-**As of 2026-09-10.** The deliverable is the **working web app**, not a paper.
-`311 collected, 2 skipped`. Launch: `streamlit run dashboard/app.py`.
+**As of 2026-10-09.** The deliverable is the **working web app**, and it is
+built. `327 collected, 2 skipped`. Launch: `streamlit run dashboard/app.py`.
 
 Read `CLAUDE.md` first for the build rules and the Status block, then this for
-what to build next. `docs/scope_minimum.md` is the floor: the app on the two
-frozen graphs.
+what to build next. `docs/scope_minimum.md` is the floor: the app on the frozen
+reference graph.
 
 ---
 
@@ -29,9 +29,10 @@ not copy it into this file.
 clone by design. If you are reading this from a fresh clone you do not have it;
 ask for it rather than reconstructing its content here.
 
-The short version: Stages 1–5's software and measurements are done. The Streamlit
-app is **built**. Remaining work is the three product gaps below. Writing is
-second.
+The short version: Stages 1–5's software and measurements are done, the
+Streamlit app is **built**, its three product gaps closed on 2026-09-19, and the
+one open weight (`Owns`) was sourced on 2026-10-13 (see below). What remains is
+writing.
 
 **Frozen graph:** `data/goad_graph.json`, sha256 `3c1bef97f75df7d2…`
 783 nodes / 5825 edges. Published GOADv2 SharpHound 2.3.3 collection
@@ -59,8 +60,39 @@ file, did not find the key, and wrongly reported the figure as unverifiable. The
 **The app is the priority.** Experimental measurement is done and stays in
 `docs/findings.md`. Do not reopen a paper-first queue.
 
-**All three product gaps closed 2026-09-19.** Kept below with what closed them,
-because each records a constraint the next change has to respect.
+### Resolved 2026-10-13 — `Owns` sourced to 4.0; concentration 79.4% -> 93.9%
+
+Was open from 2026-10-09 (one deferred weight sitting beside a reported route).
+**Resolved by Option (a): `Owns` sourced to 4.0 by derivation from `WriteDacl`.**
+An owner holds implicit WRITE_DAC, so weaponising `Owns` is the same single DACL
+write as `WriteDacl` (two actions, no take-ownership step), caught by the same
+4670/5136 (SACL) and the same SigmaHQ `posh_ps_powerview` rule — whose selection
+includes `Add-DomainObjectAcl`, the Owns-exploitation cmdlet specifically. The
+unsourced 4.5 was a premium with no detection behind it.
+
+**The consequence the 2026-10-09 note missed:** sourcing `Owns` to 4.0 keeps
+`SQL_SVC` at 15.10 (tie-break still favours `GenericWrite`), but moves 722 edges
+into the 4.0 bucket, so the **modal-weight concentration rises 79.4% -> 93.9%**
+(HHI 0.654 -> 0.884; walkable-sourced 84.2% -> 98.6%; sourced weights 21 -> 22).
+That figure is the paper's central antecedent. The 79.4% was a conservative
+reading resting on one unsourced weight; consistent sourcing **strengthens** the
+negative result rather than weakening it — and it remains a property of this one
+collection, not an unconditional claim about AD. Full derivation, the gate run,
+and the trajectory shift are in `findings.md` (2026-10-13). acl_abuse (95.3%) and
+HHI-categories (0.909) did not move — `Owns` was already in that category.
+
+All figures are now pinned to the computed values in `test_reported_figures.py`
+and `test_dashboard_numbers.py`; the weight snapshot is regenerated; `cli compare`
+confirms `SQL_SVC` 20.0/15.10; Figure 1 is regenerated. Full suite green.
+
+**Also pending, and it moves nothing:** `SyncLAPSPassword` sits at an
+unsourced 2.5 below both of its sourced components (6.5). The comment above it in
+`risk.py` records the inversion and the test that will fire when it is sourced.
+
+### Closed 2026-09-19 — the three product gaps
+
+Kept below with what closed them, because each records a constraint the next
+change has to respect.
 
 1. **BloodHound CE ingest — DONE.** `dashboard/bloodhound_parser.py` reads a
    collector export (zip or loose per-class JSON) and `dashboard/ingest.py`
@@ -148,8 +180,10 @@ because each records a constraint the next change has to respect.
    module instead of calling `hash()`, because `PYTHONHASHSEED` perturbs
    `hash()` on str/bytes and determinism is a build rule.
 
-**Writing is next** (Figure 3 / `SQL_SVC` route drawing, optimality-gap
-reproducibility claim, related-work corrections).
+**Writing is under way.** An IEEE draft is at `paper/stealthpath_ieee.tex`,
+kept outside version control like the rest of the write-up (see *Where things
+live*). Its collection section repeats the claim the `Owns` item above
+disproves, so it waits on that decision.
 
 ---
 
@@ -158,12 +192,12 @@ reproducibility claim, related-work corrections).
 - **The unpinned figure set is known, not assumed empty.** A deliberate sweep on
   2026-08-10 checked every number in live claim text against its source.
   Everything derivable is pinned by `tests/test_reported_figures.py`: the
-  concentration figures (79.4% modal share, 95.3% `acl_abuse`, HHI 0.654 and
-  0.909), the superseded 80.4% and why it is a different measurement, both |S|
-  figures with their traversal sets, `k`, the 19 dropped types, the 14 deferred
-  weights, and the H5/H6 artifact values.
+  concentration figures (93.9% modal share after Owns was sourced 2026-10-13,
+  95.3% `acl_abuse`, HHI 0.884 and 0.909), the 80.4% type-count and why it is a
+  different measurement, both |S| figures with their traversal sets, `k`, the 19
+  dropped types, the 13 deferred weights, and the H5/H6 artifact values.
 
-  **Hand-maintained, and it is the pytest counts.** `311 collected, 2 skipped`
+  **Hand-maintained, and it is the pytest counts.** `327 collected, 2 skipped`
   appears in `README.md`, `CLAUDE.md`, `handoff.md` and
   `stage1_lab_runbook.md`. It is not statically derivable — pytest's collected
   count expands `parametrize` and so differs from the AST function count in
@@ -299,14 +333,18 @@ reading it. Three reasons that separation is not optional:
 `graphify query "<question>"` exists but is weak — it returns a truncated
 keyword-matched node list, not an answer. Prefer `explain` and `affected`.
 
-## Web app — built; three gaps remain
+## Web app — built
 
 The Streamlit app in `dashboard/` is running software, not a proposal. It loads
-the two frozen graphs or an uploaded StealthPath freeze, shows the coverage
-gate first, then three planners, then optional live Q-learning under a budget.
+the reference graph (and the perturbed copy, where that file is on disk), a
+collector export, or a StealthPath freeze. It opens with the route, its per-hop
+pricing and whether it is proved; the coverage that qualifies *that route* sits
+beside it, and the directory-wide statistics are one click below under *Graph
+data quality*. The three planners are compared in an expander, and the Defend
+tab holds the SOC view.
 
 **Why the coverage gate is the differentiator, not decoration.** 19 dropped edge
-types, no AD CS, 14 unsourced weights. An arbitrary BloodHound export contains
+types, no AD CS, 13 unsourced weights. An arbitrary BloodHound export contains
 types we drop and paths we cannot price, and without a validator the tool prints
 three confident numbers that are wrong. Surfacing coverage is the product.
 
@@ -332,8 +370,9 @@ number shown for the frozen graphs must match the pinned tests / `findings.md`
 honesty panel is visible without being asked.
 
 **Q-learning:** on the reference graphs, live training is cheap (~1s). On an
-unknown upload it is not, so `dashboard/rl_upload.py` walks exact → tabular →
-linear approximation → refusal and names the rung that answered. A capped run is
+unknown upload it is not, so `dashboard/rl_upload.py` walks exact → linear
+approximation → refusal and names the rung that answered. The tabular learner
+is deliberately **not** a rung; see *Capped runs* above. A capped run is
 still a refusal plus the exact-search route, never a finished-looking partial
 policy. `results/h5_h6.json`
 is stored *results* for the two frozen graphs, not a stored model to replay on
@@ -341,19 +380,25 @@ someone else's directory.
 
 ## Where things live
 
+Rows marked **local** are gitignored since 2026-09-27: kept on disk, absent
+from a clone, restored with `git add -f`. Tests that need one of them skip
+rather than fail.
+
 | | |
 |---|---|
 | `dashboard/` | Streamlit app — the deliverable |
 | `docs/scope_minimum.md` | what ships if nothing else lands |
-| `docs/screenshots/` | UI capture placeholder |
+| `data/raw_collection/` | the collector export the reference graph came from; `tools/validate_parser.py`'s ground truth. **Tracked on purpose** — do not re-ignore it for space |
 | `graphify-out/` | queryable code index (gitignored, regenerable, never a citation) |
-| `docs/abstract.md` | engine write-up (not the homepage) |
-| `docs/findings.md` | dated results log, every entry tied to a graph hash |
-| `docs/stage2_joint_capability_audit.md` | telemetry baseline, named failure modes, per-edge status |
-| `docs/stage3_risk_model_properties.md` | 16 properties, reduced gate of 8 |
-| `docs/generator_vs_real_distribution.md` | why `random_ad` can't back distributional claims |
-| `docs/stage1_lab_runbook.md` | how to freeze your own lab collection |
-| `docs/stage0_*.md` | **frozen** — do not edit hypothesis statements |
+| `docs/screenshots/` | **local** — UI captures |
+| `paper/` | **local** — IEEE draft (`stealthpath_ieee.tex`) and its figures |
+| `docs/abstract.md` | **local** — engine write-up (not the homepage) |
+| `docs/findings.md` | **local** — dated results log, every entry tied to a graph hash |
+| `docs/stage2_joint_capability_audit.md` | **local** — telemetry baseline, named failure modes, per-edge status |
+| `docs/stage3_risk_model_properties.md` | **local** — 16 properties, reduced gate of 8 |
+| `docs/generator_vs_real_distribution.md` | **local** — why `random_ad` can't back distributional claims |
+| `docs/stage1_lab_runbook.md` | **local** — how to freeze your own lab collection |
+| `docs/stage0_*.md` | **local**, **frozen** — do not edit hypothesis statements |
 
 `CLAUDE.md` is gitignored, so it is **not in the repo** — a fresh clone gets
 neither the build rules nor the Status block. **This is deliberate and stays

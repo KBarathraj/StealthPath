@@ -5,6 +5,9 @@ networkx>=3.0        # plotting + independent cross-check of our Dijkstra
 # Stage 4-5 (install now so the Non-Cyber Track's Stage 0 setup task is done)
 gymnasium>=0.29
 stable-baselines3>=2.2
+sb3-contrib>=2.2      # MaskablePPO: the pre-registered PPO planner needs per-step
+                     # action masking (max out-degree 1109). See planners/ppo.py.
+                     # Optional for the suite: tests/test_ppo.py skips without it.
 torch>=2.1
 numpy>=1.24
 scipy>=1.11          # confidence intervals, bootstrap CIs for Stage 5

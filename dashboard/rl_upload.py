@@ -133,9 +133,17 @@ def plan_upload(graph: AttackGraph,
                 max_hops: int = 20,
                 episodes: int | None = None,
                 seed: int = 0,
-                run_learner: bool = True) -> UploadPlan:
-    """Walk the ladder and return the strongest rung that finished in budget."""
+                run_learner: bool = True,
+                allowed: frozenset[str] | None = None) -> UploadPlan:
+    """Walk the ladder and return the strongest rung that finished in budget.
+
+    `allowed` overrides the default traversable set. The custom-relationships
+    feature passes `_ALLOWED | walkable_types(specs)` so analyst-added types are
+    walkable; it must be called inside a `custom_schema.overlay` so `category_of`
+    and `weight_of` recognise those types. Default keeps the frozen set.
+    """
     budget = budget or TrainingBudget()
+    allowed = _ALLOWED if allowed is None else allowed
     cost_fn = history_cost_fn()
     notes: list[str] = []
     started = time.perf_counter()
@@ -154,7 +162,7 @@ def plan_upload(graph: AttackGraph,
     try:
         exact_path = _with_deadline(
             lambda: exact_history_search(graph, sources, targets, cost_fn,
-                                         _ALLOWED, max_hops),
+                                         allowed, max_hops),
             budget.max_seconds)
     except TimeoutError:
         exact_timed_out = True
@@ -170,7 +178,7 @@ def plan_upload(graph: AttackGraph,
     learned = None
     if run_learner:
         learned = _learn(graph, sources, targets, cost_fn, budget, max_hops,
-                         episodes, seed, exact_path, notes)
+                         episodes, seed, exact_path, notes, allowed)
 
     if exact_path is not None:
         return UploadPlan(
@@ -198,7 +206,7 @@ def plan_upload(graph: AttackGraph,
 
 
 def _learn(graph, sources, targets, cost_fn, budget, max_hops, episodes, seed,
-           exact_path, notes) -> LearnedRoute | None:
+           exact_path, notes, allowed=_ALLOWED) -> LearnedRoute | None:
     """Train from **every** start node, and keep the best route.
 
     **The source set must match the one the exact search used.** It briefly did
@@ -225,7 +233,7 @@ def _learn(graph, sources, targets, cost_fn, budget, max_hops, episodes, seed,
             result = train_approx(
                 graph, source, targets, cost_fn,
                 ApproxQConfig(episodes=cfg_episodes, seed=seed, max_hops=max_hops),
-                _ALLOWED, on_checkpoint=watchdog)
+                allowed, on_checkpoint=watchdog)
             if result.path and (best is None or result.path.cost < best.cost):
                 best, best_result = result.path, result
     except BudgetExceeded as exc:

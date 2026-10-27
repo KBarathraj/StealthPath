@@ -56,11 +56,17 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from contextlib import nullcontext  # noqa: E402
+
 from dashboard import compute as C  # noqa: E402
 from dashboard import rl_upload as U  # noqa: E402
 from dashboard import rl_view as R  # noqa: E402
+from dashboard.bloodhound_parser import to_attack_graph  # noqa: E402
 from dashboard.ingest import UnsupportedGraphError, load_uploads  # noqa: E402
 from stealthpath.graph import AttackGraph  # noqa: E402
+from stealthpath.custom_schema import (  # noqa: E402
+    CATEGORY_NAMES, CustomRelationship, overlay, walkable_types,
+)
 
 # Filtered to what is actually on disk. The perturbed graph is gitignored as of
 # 2026-09-27 — kept locally, out of the repo — so a fresh clone has one demo,
@@ -246,7 +252,13 @@ def _tiles(items: list[tuple[str, str]]) -> str:
 # --------------------------------------------------------------------------
 
 def _load_graph(st):
-    """Sidebar: upload a collection, or pick a bundled demo. Returns (graph, demo_id)."""
+    """Sidebar: upload a collection, or pick a bundled demo.
+
+    Returns (graph, demo_id, parsed). `parsed` is the collector export's
+    `ParsedExport` for an upload (so dropped types can be re-admitted for the
+    custom-relationships feature) and None for a demo freeze, whose dropped edges
+    are not in the file.
+    """
     st.sidebar.markdown("### Graph")
     uploaded = st.sidebar.file_uploader(
         "BloodHound export (.zip) or StealthPath freeze (.json)",
@@ -279,7 +291,7 @@ def _load_graph(st):
                 st.sidebar.caption(
                     f"{stubs} object(s) referenced by an ACE or group but never "
                     "collected. Kept with no properties rather than dropped.")
-        return graph, None
+        return graph, None, loaded.parsed
 
     if demo_label.startswith("(none"):
         st.sidebar.info("Upload a BloodHound export, or pick a demo graph.")
@@ -289,7 +301,7 @@ def _load_graph(st):
     st.sidebar.caption(
         f"{len(graph.nodes):,} objects · {len(graph.edges):,} relationships. "
         "Demo file, never written back.")
-    return graph, DEMO_GRAPH_ID[demo_label]
+    return graph, DEMO_GRAPH_ID[demo_label], None
 
 
 def _query_controls(st, starts: list[str], targets: list[str], demo_id: str | None):
@@ -666,75 +678,159 @@ def render_stored_record(st, entry: str, demo_id: str | None) -> None:
 
 # --------------------------------------------------------------------------
 
+def render_custom_sidebar(st, graph, has_parsed: bool) -> list:
+    """Let a SOC analyst ADD a relationship type the schema drops, for this
+    directory, in-session. Returns the current list of CustomRelationship.
+
+    The frozen default schema is never touched. A custom type is unsourced by
+    construction (see `stealthpath.custom_schema`), so every route that uses one
+    is rendered unverified. This widget only collects the specs; `main` applies
+    them inside a `custom_schema.overlay` so the rest of the app is unchanged.
+    """
+    specs: list = st.session_state.setdefault("custom_rels", [])
+    with st.sidebar.expander("➕ Add a relationship we drop (your environment)"):
+        st.caption(
+            "Keep and price a relationship type your BloodHound export has that "
+            "the default schema drops (e.g. an AD CS edge). It is **unverified** "
+            "— your weight is not sourced, so any route using it is badged so.")
+
+        dropped = graph.provenance.get("dropped_unknown_edge_types", {}) or {}
+        taken = {s.rel_type for s in specs}
+        candidates = [t for t in dropped if t not in taken]
+        if not has_parsed:
+            st.caption("This graph is a **freeze** — the types it dropped when it "
+                       "was built are not in the file, so adding one here won't "
+                       "change a route. Upload a collector export (.zip) to keep "
+                       "and price a dropped type.")
+        elif candidates:
+            st.caption("Dropped in this upload (add any to keep + price it): "
+                       + ", ".join(f"{t} ({dropped[t]})" for t in candidates[:8]))
+
+        with st.form("add_custom_rel", clear_on_submit=True):
+            name = st.text_input("Relationship type", value="",
+                                 placeholder=(candidates[0] if candidates else "e.g. ADCSESC1"))
+            category = st.selectbox("Behaves like (category)", CATEGORY_NAMES,
+                                    index=CATEGORY_NAMES.index("acl_abuse"))
+            weight = st.slider("Detection weight (loudness)", 0.1, 10.0, 4.0, 0.1)
+            walkable = st.checkbox("A planner may traverse it", value=True)
+            note = st.text_input("Your rationale (optional, not a citation)", "")
+            if st.form_submit_button("Add relationship"):
+                try:
+                    spec = CustomRelationship(rel_type=name.strip(), category=category,
+                                              weight=weight, walkable=walkable, note=note)
+                    from stealthpath.custom_schema import validate
+                    validate(spec)
+                    if spec.rel_type in {s.rel_type for s in specs}:
+                        st.warning(f"{spec.rel_type} is already added.")
+                    else:
+                        specs.append(spec)
+                except ValueError as exc:
+                    st.error(str(exc))
+
+        if specs:
+            st.caption("**Active custom types (unverified):**")
+            for s in list(specs):
+                c1, c2 = st.columns([5, 1])
+                c1.caption(f"`{s.rel_type}` → {s.category} · weight {s.weight:g}"
+                           f"{' · walkable' if s.walkable else ' · not walkable'}")
+                if c2.button("✕", key=f"rm_{s.rel_type}"):
+                    specs.remove(s)
+                    st.rerun()
+    return specs
+
+
 def main() -> None:  # pragma: no cover - entry point, exercised by hand
     st = _st()
     st.set_page_config(page_title="StealthPath", layout="wide",
                        initial_sidebar_state="expanded")
     _style(st)
 
-    graph, demo_id = _load_graph(st)
-    starts = C.starting_points(graph)
-    targets = C.target_names(graph)
+    graph, demo_id, parsed = _load_graph(st)
+    specs = render_custom_sidebar(st, graph, has_parsed=parsed is not None)
 
-    st.markdown(
-        '<div class="sp-top"><span class="sp-mark">StealthPath</span>'
-        '<span class="sp-tag">cheapest route to Domain Admin, priced by how '
-        'likely each step is to be noticed</span>'
-        f'<span class="sp-badge">{len(graph.nodes):,} objects · '
-        f'{len(graph.edges):,} rels</span></div>',
-        unsafe_allow_html=True)
+    # Everything that prices or routes must see the custom types, so the whole
+    # body runs inside the overlay when any are defined. Outside it the frozen
+    # schema is exactly restored (custom_schema guarantees it).
+    with (overlay(specs) if specs else nullcontext()):
+        # Re-admit the custom types into the graph. Only possible for an upload,
+        # whose ParsedExport still holds the dropped edges; a demo freeze has none.
+        if specs and parsed is not None:
+            graph = to_attack_graph(parsed, drop_unknown_edges=True)
+        allowed = (frozenset(U._ALLOWED | walkable_types(specs)) if specs else None)
 
-    if not starts:
-        st.error("This graph has no objects to start from.")
-        st.stop()
-    if not targets:
-        st.error(
-            "No Domain Admins group, Enterprise Admins group or domain object "
-            "was found, so there is no destination to plan to. Targets are "
-            "derived from well-known RIDs and domain structure; if this "
-            "directory is shaped differently, the graph may be incomplete.")
-        st.stop()
+        starts = C.starting_points(graph)
+        targets = C.target_names(graph)
 
-    entry, target, budget_seconds = _query_controls(st, starts, targets, demo_id)
-    view = graph.with_gpo_expansion()
-    key = (entry, target, budget_seconds, id(graph))
+        st.markdown(
+            '<div class="sp-top"><span class="sp-mark">StealthPath</span>'
+            '<span class="sp-tag">cheapest route to Domain Admin, priced by how '
+            'loud each step is (a relative score, not a probability)</span>'
+            f'<span class="sp-badge">{len(graph.nodes):,} objects · '
+            f'{len(graph.edges):,} rels</span></div>',
+            unsafe_allow_html=True)
 
-    route_tab, defend_tab = st.tabs(
-        ["Attack route — one account", "Defend — whole directory"])
+        if specs:
+            names = ", ".join(f"`{s.rel_type}`" for s in specs)
+            st.warning(
+                f"**{len(specs)} custom relationship type(s) active — results "
+                f"below are UNVERIFIED.** {names} carry analyst-supplied weights "
+                "that did not pass the sourcing gate; any route using one is "
+                "priced on an unsourced number, and its hops show an unverified "
+                "dot. The frozen reference table is untouched.")
 
-    with route_tab:
-        if st.button("Find the route to Domain Admin", type="primary"):
-            with st.spinner("Searching for the optimal route, then checking it "
-                            "against a learned one…"):
-                st.session_state["plan"] = (key, U.plan_upload(
-                    view,
-                    C.resolve_sources(view, entry),
-                    C.resolve_targets(view, target),
-                    budget=R.TrainingBudget(max_seconds=budget_seconds)))
+        if not starts:
+            st.error("This graph has no objects to start from.")
+            st.stop()
+        if not targets:
+            st.error(
+                "No Domain Admins group, Enterprise Admins group or domain object "
+                "was found, so there is no destination to plan to. Targets are "
+                "derived from well-known RIDs and domain structure; if this "
+                "directory is shaped differently, the graph may be incomplete.")
+            st.stop()
 
-        cached = st.session_state.get("plan")
-        if cached and cached[0] == key:
-            plan = cached[1]
-            detection = C.route_detection_rows(plan.route)
-            render_verdict(st, plan)
-            render_tiles(st, plan, detection)
-            left, right = st.columns([1.35, 1], gap="large")
-            with left:
-                render_route_diagram(st, plan, detection)
-            with right:
-                render_side_panel(st, graph, plan, detection)
-            if plan.found_route:
-                render_evidence(st, detection)
-        else:
-            st.info("Pick a start account in the sidebar, then press "
-                    "**Find the route to Domain Admin**.")
+        entry, target, budget_seconds = _query_controls(st, starts, targets, demo_id)
+        view = graph.with_gpo_expansion()
+        key = (entry, target, budget_seconds, id(graph), tuple(sorted(
+            (s.rel_type, s.category, s.weight, s.walkable) for s in specs)))
 
-        render_comparison(st, graph, entry, target)
-        render_data_quality(st, graph)
-        render_stored_record(st, entry, demo_id)
+        route_tab, defend_tab = st.tabs(
+            ["Attack route — one account", "Defend — whole directory"])
 
-    with defend_tab:
-        render_defend(st, graph)
+        with route_tab:
+            if st.button("Find the route to Domain Admin", type="primary"):
+                with st.spinner("Searching for the optimal route, then checking it "
+                                "against a learned one…"):
+                    st.session_state["plan"] = (key, U.plan_upload(
+                        view,
+                        C.resolve_sources(view, entry),
+                        C.resolve_targets(view, target),
+                        budget=R.TrainingBudget(max_seconds=budget_seconds),
+                        allowed=allowed))
+
+            cached = st.session_state.get("plan")
+            if cached and cached[0] == key:
+                plan = cached[1]
+                detection = C.route_detection_rows(plan.route)
+                render_verdict(st, plan)
+                render_tiles(st, plan, detection)
+                left, right = st.columns([1.35, 1], gap="large")
+                with left:
+                    render_route_diagram(st, plan, detection)
+                with right:
+                    render_side_panel(st, graph, plan, detection)
+                if plan.found_route:
+                    render_evidence(st, detection)
+            else:
+                st.info("Pick a start account in the sidebar, then press "
+                        "**Find the route to Domain Admin**.")
+
+            render_comparison(st, graph, entry, target)
+            render_data_quality(st, graph)
+            render_stored_record(st, entry, demo_id)
+
+        with defend_tab:
+            render_defend(st, graph)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -69,8 +69,8 @@ def test_deferred_weight_count_is_derived_from_the_risk_table():
     missing = unsourced()
     sourced = total - len(missing)
     assert total == 35
-    assert sourced == 21
-    assert len(missing) == 14
+    assert sourced == 22
+    assert len(missing) == 13
 
 
 def test_the_two_counts_are_different_quantities():
@@ -142,11 +142,19 @@ def _walkable():
 
 
 def test_concentration_figures_match_the_collection():
-    """79.4% modal-weight share, 95.3% acl_abuse, HHI 0.654 and 0.909.
+    """93.9% modal-weight share, 95.3% acl_abuse, HHI 0.884 and 0.909.
 
     These are the antecedent of the paper's conditional claim — the numbers a
     reader computes on their own collection to decide whether it applies to
     them — so they are the ones least tolerable as prose.
+
+    Modal share and HHI-over-weights moved 79.4%->93.9% and 0.654->0.884 on
+    2026-10-13, when `Owns` was sourced to 4.0 (from an unsourced 4.5) and its
+    722 edges joined the modal 4.0 bucket. See the dated finding in
+    `findings.md`: the 79.4% was a conservative artifact of one unsourced weight,
+    and consistent sourcing strengthens the concentration result rather than
+    weakening it. acl_abuse share and HHI-over-categories did not move, because
+    `Owns` was already in the acl_abuse category — only its weight changed.
     """
     g, walk = _walkable()
     n = len(walk)
@@ -154,26 +162,37 @@ def test_concentration_figures_match_the_collection():
 
     by_weight = Counter(PROVISIONAL_WEIGHTS[e.rel_type].weight for e in walk)
     modal_weight, modal_n = by_weight.most_common(1)[0]
-    assert (modal_weight, modal_n) == (4.0, 3965)
-    assert round(modal_n / n * 100, 1) == 79.4
+    assert (modal_weight, modal_n) == (4.0, 4687)
+    assert round(modal_n / n * 100, 1) == 93.9
 
     by_cat = Counter(category_of(e.rel_type) for e in walk)
     assert round(by_cat["acl_abuse"] / n * 100, 1) == 95.3
 
-    assert round(sum((v / n) ** 2 for v in by_weight.values()), 3) == 0.654
+    assert round(sum((v / n) ** 2 for v in by_weight.values()), 3) == 0.884
     assert round(sum((v / n) ** 2 for v in by_cat.values()), 3) == 0.909
 
 
 def test_the_superseded_share_is_a_different_measurement():
-    """80.4% is five ACL types *including* Owns over all 5,825 edges, and Owns
-    derives to 4.5 so it never shared the signature. Both numbers are real;
-    pinning both is what stops one being reused for the other."""
+    """80.4% is a *type count* — five ACL types over all 5,825 edges — not a
+    weight share. It stays a distinct measurement from the 93.9% modal-weight
+    share even now that `Owns` is sourced to 4.0 and does share the 4.0 weight
+    signature. The two differ by construction: the modal share is over WALKABLE
+    edges and its 4.0 bucket also holds ForceChangePassword, while this count is
+    over ALL edges and is restricted to the five ACL types. Pinning both is what
+    stops one being reused for the other.
+
+    Before 2026-10-13 this test asserted `Owns != 4.0`, because the unsourced 4.5
+    was the only thing keeping `Owns` out of the modal bucket. Sourcing it made
+    that guard false *and* raised the modal share — the guard was protecting a
+    number that rested on an unsourced weight, which is exactly backwards."""
     g, _ = _walkable()
     counts = Counter(e.rel_type for e in g.edges)
     five = ["WriteDacl", "WriteOwner", "GenericAll", "Owns", "GenericWrite"]
     assert sum(counts[t] for t in five) == 4686
     assert round(4686 / len(g.edges) * 100, 1) == 80.4
-    assert PROVISIONAL_WEIGHTS["Owns"].weight != 4.0
+    # 80.4% (type count, all edges) != 93.9% (modal weight share, walkable).
+    assert round(4686 / len(g.edges) * 100, 1) != 93.9
+    assert PROVISIONAL_WEIGHTS["Owns"].weight == 4.0
 
 
 def test_both_state_space_figures_and_their_traversal_sets():
@@ -223,38 +242,46 @@ def test_h5_h6_figures_come_from_the_artifact():
                            "(gitignored write-up)")
 def test_docs_quote_the_concentration_figures():
     abstract = (DOCS / "abstract.md").read_text(encoding="utf-8")
-    for figure in ("79.4%", "95.3%", "0.654", "0.909", "801,792", "400,896"):
+    for figure in ("93.9%", "95.3%", "0.884", "0.909", "801,792", "400,896"):
         assert figure in abstract, f"abstract.md no longer quotes {figure}"
 
 
-def test_modal_class_membership_is_five_types_but_four_share_the_signature():
+def test_modal_class_membership_is_six_types_but_five_share_the_signature():
     """The distinction the prose must keep, pinned so it cannot collapse back.
 
-    The *modal-weight* class is five types — what a planner sees, since it reads
-    weights and not derivations. The *shared-signature* class is four — what the
+    The *modal-weight* class is six types — what a planner sees, since it reads
+    weights and not derivations. The *shared-signature* class is five — what the
     mechanism is actually about. `ForceChangePassword` reaches 4.0 by an
-    unrelated route and contributes a single edge, so the two shares differ only
-    at the second decimal, which is exactly what makes them easy to conflate.
+    unrelated route (a password reset, default-channel telemetry) and contributes
+    a single edge, so the two shares differ only at the second decimal, which is
+    exactly what makes them easy to conflate.
+
+    Was "five types but four share" until 2026-10-13: `Owns` was sourced to 4.0
+    with the DACL-write channels, so it joined BOTH classes (it reads 4.0 now,
+    and its observable is the same nTSecurityDescriptor write as the other four).
+    `ForceChangePassword` remains the lone modal-but-not-signature type.
     """
     _, walk = _walkable()
     n = len(walk)
     counts = Counter(e.rel_type for e in walk)
     modal = {t for t in counts if PROVISIONAL_WEIGHTS[t].weight == 4.0}
-    shape_d = {"WriteDacl", "WriteOwner", "GenericAll", "GenericWrite"}
+    # The DACL-write family, by shared detection signature (NATIVE_SACL +
+    # ENDPOINT_RULE), now including the sourced Owns.
+    shared_sig = {"WriteDacl", "WriteOwner", "GenericAll", "GenericWrite", "Owns"}
 
-    assert modal == shape_d | {"ForceChangePassword"}
+    assert modal == shared_sig | {"ForceChangePassword"}
     assert counts["ForceChangePassword"] == 1
 
     # Same number, different channels: convergence in the output of two
     # derivations, not a shared cause.
     fcp = set(PROVISIONAL_WEIGHTS["ForceChangePassword"].channels)
-    for t in shape_d:
+    for t in shared_sig:
         assert set(PROVISIONAL_WEIGHTS[t].channels) != fcp
 
-    assert sum(counts[t] for t in shape_d) == 3964
-    assert sum(counts[t] for t in modal) == 3965
-    assert round(sum(counts[t] for t in shape_d) / n * 100, 2) == 79.42
-    assert round(sum(counts[t] for t in modal) / n * 100, 2) == 79.44
+    assert sum(counts[t] for t in shared_sig) == 4686
+    assert sum(counts[t] for t in modal) == 4687
+    assert round(sum(counts[t] for t in shared_sig) / n * 100, 2) == 93.89
+    assert round(sum(counts[t] for t in modal) / n * 100, 2) == 93.91
 
 
 # Figures 4-6, added 2026-09-06. Rendered by `tools/figure_rl_trajectory.py`
@@ -265,7 +292,7 @@ def test_modal_class_membership_is_five_types_but_four_share_the_signature():
 RL_FIGURES = {
     #  entry:                        (optimum, first target ep, converged ep)
     "SAMWELL.TARLY@NORTH": (4.1, 3, 12_000),
-    "SQL_SVC@NORTH": (15.1, 37, 36_000),
+    "SQL_SVC@NORTH": (15.1, 37, 37_000),
     "TYWIN.LANNISTER@SEVENKINGDOMS": (44.5, 9_033, 22_000),
 }
 
@@ -301,25 +328,26 @@ def test_only_sql_svc_moves_and_it_does_not_move_monotonically():
     already exact, and everything before it is the policy having no route at all
     — so what takes 22,000 episodes on `TYWIN` is *stability*, not improvement.
 
-    `SQL_SVC` is the exception: it moves, through five distinct costs. **It does
+    `SQL_SVC` is the exception: it moves, through three distinct costs. **It does
     not descend.** An earlier version of this docstring said it "genuinely
     descends", which was wrong, and the assertion below could not catch it
     because it compared a *sorted set* of costs and so discarded the order the
-    claim was about. The actual shape, seed 0:
+    claim was about. The actual shape, seed 0 (after `Owns` was sourced to 4.0 on
+    2026-10-13, which re-priced the edges the exploration passes through and
+    collapsed the earlier five-value trajectory to three):
 
         ep  5,000   20.14
         ep  8,000   15.10   <- optimum reached here
-        ep 10,000   15.60   <- and left again
-        ep 11,000   15.22
-        ep 12,000   15.10
-        ep 16,000   29.72   <- 97% above optimum, worse than its first route
-        ep 18,000   15.22
+        ep 11,000   15.22   <- and left again
+        ep 16,000   15.10
+        ep 17,000   15.22   <- left once more
         ep 19,000   15.10   <- settles
 
     A greedy extraction from a partially converged Q-table has no reason to
     improve monotonically: the argmax can move to a state-action pair whose
     value is still badly estimated. Saying that plainly is stronger than
-    implying a smooth curve, and the excursion at 16,000 is the evidence.
+    implying a smooth curve, and the excursions at 11,000 and 17,000 are the
+    evidence.
 
     That split is not incidental: `SQL_SVC` is also the entry with the largest
     Q-table (1,076 against 11 and 84) and the only one where the plain and
@@ -342,7 +370,7 @@ def test_only_sql_svc_moves_and_it_does_not_move_monotonically():
 
     assert seen["SAMWELL.TARLY@NORTH"] == [4.1]
     assert seen["TYWIN.LANNISTER@SEVENKINGDOMS"] == [44.5]
-    assert seen["SQL_SVC@NORTH"] == [15.1, 15.22, 15.6, 20.14, 29.72]
+    assert seen["SQL_SVC@NORTH"] == [15.1, 15.22, 20.14]
 
     # Order, not just the value set. The set assertion above cannot distinguish
     # a descent from an excursion, which is how the "genuinely descends" wording
@@ -356,7 +384,9 @@ def test_only_sql_svc_moves_and_it_does_not_move_monotonically():
     first_opt = costs.index(optimum)
     assert max(costs[first_opt:]) > optimum, (
         "the policy is expected to leave the optimum after first reaching it")
-    assert round(max(costs[first_opt:]), 2) == 29.72
+    # Was 29.72 before Owns was sourced; the re-priced exploration no longer
+    # takes the large excursion, and the post-optimum wandering tops out at 15.22.
+    assert round(max(costs[first_opt:]), 2) == 15.22
 
 
 def test_figure_3_route_comparison_is_the_h1_result():

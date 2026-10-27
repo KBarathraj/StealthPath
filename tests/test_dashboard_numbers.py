@@ -65,9 +65,12 @@ def test_profile_matches_the_collapse_figures_on_the_base_graph(base):
     """
     p = C.graph_profile(base)
     assert (p["edges_total"], p["edges_walkable"]) == (5825, 4991)
-    assert (p["modal_weight"], p["modal_weight_edges"]) == (4.0, 3965)
-    assert round(p["modal_weight_share"] * 100, 1) == 79.4
-    assert round(p["hhi_weights"], 3) == 0.654
+    # 3,965 / 79.4% / 0.654 until Owns was sourced to 4.0 on 2026-10-13; its 722
+    # edges joined the modal bucket. acl_abuse is unchanged (Owns was already in
+    # that category). See findings.md and test_reported_figures.py.
+    assert (p["modal_weight"], p["modal_weight_edges"]) == (4.0, 4687)
+    assert round(p["modal_weight_share"] * 100, 1) == 93.9
+    assert round(p["hhi_weights"], 3) == 0.884
     assert round(p["hhi_categories"], 3) == 0.909
     assert p["acl_abuse_edges"] == 4754
     assert round(p["acl_abuse_share"] * 100, 1) == 95.3
@@ -85,9 +88,11 @@ def test_profile_on_the_perturbed_graph_moves_only_where_the_diff_did(perturbed,
     """
     p = C.graph_profile(perturbed)
     assert (p["edges_total"], p["edges_walkable"]) == (5827, 4993)
-    assert (p["modal_weight"], p["modal_weight_edges"]) == (4.0, 3966)
-    assert round(p["modal_weight_share"] * 100, 1) == 79.4
-    assert round(p["hhi_weights"], 3) == 0.654
+    # 3,966 / 0.654 until Owns was sourced to 4.0; +1 vs base because the
+    # perturbation's added edge is a GenericAll (also 4.0).
+    assert (p["modal_weight"], p["modal_weight_edges"]) == (4.0, 4688)
+    assert round(p["modal_weight_share"] * 100, 1) == 93.9
+    assert round(p["hhi_weights"], 3) == 0.883
     assert round(p["hhi_categories"], 3) == 0.909
     assert p["acl_abuse_edges"] == 4755
     assert round(p["acl_abuse_share"] * 100, 1) == 95.2
@@ -121,13 +126,15 @@ def test_dropped_types_are_pinned_and_absence_is_not_reported_as_zero(base, pert
 def test_the_superseded_share_is_not_what_the_profile_reports(base):
     """80.4% is a different measurement and must not surface as the collapse figure.
 
-    findings.md:270-282. `Owns` derives to 4.5 and never shared the signature,
-    so a profile reporting 80.4 would be quoting the right number for the wrong
-    quantity — the specific error that entry exists to record.
+    80.4% is a type count over all 5,825 edges; the collapse figure is the
+    93.9% modal-weight share over walkable edges. They stay distinct even now
+    that `Owns` is sourced to 4.0 and shares the 4.0 signature (it moved the
+    modal share to 93.9%). A profile reporting 80.4 would be quoting the right
+    number for the wrong quantity.
     """
     p = C.graph_profile(base)
     assert round(p["modal_weight_share"] * 100, 1) != 80.4
-    assert p["weight_distribution"][4.0] == 3965
+    assert p["weight_distribution"][4.0] == 4687
     assert 4.5 in p["weight_distribution"]
 
 
@@ -143,12 +150,15 @@ def test_graph_level_coverage(base):
     None of them is walkable, so no route can reach one.
     """
     cov = C.coverage(base)
-    assert (cov["weights_sourced"], cov["weights_total"]) == (21, 35)
+    assert (cov["weights_sourced"], cov["weights_total"]) == (22, 35)
     assert cov["all_edges"]["total"] == 5825
     assert cov["all_edges"]["unpriced"] == 76
+    # sourced 4200 -> 4922 (provisional 791 -> 69) when Owns (722 walkable edges)
+    # was sourced on 2026-10-13. unpriced is unchanged: the four unpriced types
+    # still have no RiskWeight at all, which is a different state from provisional.
     assert cov["walkable_edges"] == {
-        "total": 4991, "sourced": 4200, "provisional": 791, "unpriced": 0,
-        "sourced_share": 4200 / 4991,
+        "total": 4991, "sourced": 4922, "provisional": 69, "unpriced": 0,
+        "sourced_share": 4922 / 4991,
     }
     unpriced = sorted(t for t, v in cov["by_edge_type"].items()
                       if v["status"] == "unpriced")
@@ -160,11 +170,16 @@ def test_graph_level_coverage(base):
 def test_every_reported_route_is_fully_sourced_though_the_graph_is_not(base):
     """The reason per-route coverage is reported separately from per-edge.
 
-    The graph is 84.2% sourced across walkable edges, but all nine reported
-    routes are 100% sourced. That is not luck: CLAUDE.md defers 14 weights on
+    The graph is 98.6% sourced across walkable edges, but all nine reported
+    routes are 100% sourced. That is not luck: CLAUDE.md defers 13 weights on
     the stated grounds that they "sit on no observed route", and this is the
     check that the claim still holds. If a deferred weight ever lands on a
     reported route, this fails and the deferral has to be revisited.
+
+    The share rose 84.2% -> 98.6% on 2026-10-13 when Owns was sourced; the
+    per-route guarantee is unchanged. Owns is not on any reported route - it is
+    the losing side of the SQL_SVC final-hop tie (GenericWrite wins it) - which
+    is why sourcing it moved no route while still pricing 722 more walkable edges.
     """
     cov = C.coverage(base)
     for entry, planners in cov["routes"].items():
@@ -174,7 +189,7 @@ def test_every_reported_route_is_fully_sourced_though_the_graph_is_not(base):
                 f"{[h for h in route['per_hop'] if h['status'] != 'sourced']}")
             assert route["provisional"] == 0 and route["unpriced"] == 0
 
-    assert round(cov["walkable_edges"]["sourced_share"] * 100, 1) == 84.2
+    assert round(cov["walkable_edges"]["sourced_share"] * 100, 1) == 98.6
     assert [cov["routes"][e]["exact_history"]["hops"] for e in C.ENTRY_POINTS] == [2, 4, 9]
 
 
@@ -420,10 +435,16 @@ def test_qlearning_result_refuses_unknown_inputs_rather_than_defaulting():
 
 
 def test_pricing_verdict_is_poor_on_the_reference_collection(base):
-    """21/35 sourced and 19 types dropped — the honesty panel must say POOR."""
+    """22/35 sourced and 19 types dropped — the honesty panel must still say POOR.
+
+    Sourcing Owns raised the walkable-sourced share 84.2% -> 98.6%, but the
+    verdict is GOOD only when *every* walkable edge is sourced AND nothing was
+    dropped. 69 walkable edges remain provisional and 19 types are still dropped,
+    so POOR holds — the gate did not weaken.
+    """
     v = C.pricing_verdict(base)
     assert v["verdict"] == "POOR"
-    assert round(v["walkable_sourced_share"] * 100, 1) == 84.2
+    assert round(v["walkable_sourced_share"] * 100, 1) == 98.6
     assert v["dropped_types"] == 19
 
 

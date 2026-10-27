@@ -432,8 +432,48 @@ PROVISIONAL_WEIGHTS: dict[str, RiskWeight] = {
             "directory-object attributes, so no technique ID is claimed."
         ),
     ),
-    "Owns": _w(4.5, "Ownership implies the ability to rewrite the DACL; the "
-                    "noise comes from what follows."),
+    "Owns": RiskWeight(
+        weight=4.0,
+        channels=(NATIVE_SACL, ENDPOINT_RULE),
+        conditional={"target_is_tier_zero": 5.5, "tooling_is_native_ldap": 1.5},
+        rationale=(
+            "Sourced 2026-10-13 by derivation from WriteDacl, which it matches "
+            "because the observable act is identical, not merely similar.\n"
+            "  Chain: an owner holds implicit WRITE_DAC, so weaponising ownership "
+            "is a single DACL write (add an ACE granting full control) then use "
+            "it - TWO actions, the same count as WriteDacl. There is NO "
+            "take-ownership step, which is what separates this from WriteOwner's "
+            "three-action chain and its higher tier-zero value. So Owns ties "
+            "WriteDacl, not WriteOwner.\n"
+            "  IMPACT-VS-LOUDNESS: the old 4.5 priced ownership as inherently "
+            "worse than an explicit WRITE_DAC grant. It is not louder - the same "
+            "nTSecurityDescriptor write produces the same events. 4.5 was an "
+            "unsourced premium with no detection behind it.\n"
+            "  non-tier-zero (1.5, applies today): no SACL, no 5136; a native-LDAP "
+            "DACL write (dacledit) also evades the PowerView script-block rule.\n"
+            "  tier-zero (5.5): 4670/5136 on nTSecurityDescriptor, matching "
+            "WriteDacl's tier-zero exactly.\n"
+            "  VALIDITY CAVEAT (not loudness): SharpHound emits Owns with no "
+            "OWNER RIGHTS (S-1-3-4) check, so on an object carrying that ACE the "
+            "owner's implicit WRITE_DAC is stripped and the edge is not "
+            "traversable. Same caveat WriteOwner records; it bears on whether the "
+            "edge should exist, not on how loud exercising it is."
+        ),
+        source=(
+            "Exercising an Owns edge is a DACL modification (PowerView "
+            "Add-DomainObjectAcl, or dacledit), caught by the SAME channels as "
+            "WriteDacl: event 4670 (permissions changed; old/new SDDL) and 5136 "
+            "on nTSecurityDescriptor, both requiring DS-access auditing AND a "
+            "SACL; and SigmaHQ posh_ps_powerview_malicious_commandlets.yml, whose "
+            "selection list includes Add-DomainObjectAcl on script-block logging. "
+            "The endpoint rule covers the Owns-exploitation cmdlet specifically, "
+            "not only the WriteOwner one. TrustedSec, 'A Hitch-hacker's Guide to "
+            "DACL-Based Detections', for the engineering and the SACL "
+            "precondition. T1222 is a weak fit (file/directory, not directory "
+            "objects) and no technique ID is claimed, matching WriteDacl. "
+            "MS-ADTS 6.1.3.4 for the OWNER RIGHTS caveat."
+        ),
+    ),
     "WriteAccountRestrictions": _w(4.5, "Narrow, unusual attribute write."),
     "GenericAll": RiskWeight(
         weight=4.0,
